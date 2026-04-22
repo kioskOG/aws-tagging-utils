@@ -182,3 +182,33 @@ Clone the repo, then use **uv** with the project path. This is the usual approac
 - `apply_governance`: Automatic discovery and tagging.
 - `get_tag_report`: Summary status of tagging coverage.
 - `sync_tags`: Propagation of tags (e.g., VPC -> Subnets).
+
+
+## Troubleshooting
+
+### 1. `ModuleNotFoundError: No module named 'mcp_server'`
+This usually means the package was not correctly installed into the `uv` cache. 
+- **Fix**: Ensure `pyproject.toml` has the `[tool.setuptools]` section and `src/__init__.py` exists. 
+- If running via `uvx`, remember to **push your changes to GitHub** before running the command, as `uvx` fetches the code from the remote repository.
+
+### 2. `Failed to resolve --with requirement`
+This error occurs when `uv` cannot find a `pyproject.toml` or `setup.py` in the repository.
+- **Fix**: Ensure `pyproject.toml` is present in the root directory.
+
+### 3. `Incorrect type. Expected "object"` in `mcp.json`
+This is a JSON syntax error in your MCP client configuration.
+- **Fix**: Ensure `"env"` is NOT inside the `"args"` array. It should be a sibling to `"command"` and `"args"`.
+- Check for missing commas or extra/missing curly braces.
+
+### 4. Authentication / AWS Errors
+The MCP server runs as a background process. If it fails to authenticate with AWS:
+- **Fix**: Ensure `AWS_PROFILE` or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` are passed in the `"env"` section of your MCP config.
+- Verify that the profile exists on the machine where the MCP client (e.g., Cursor or Claude Desktop) is running.
+
+### 5. Server fails to start (EOF error)
+If the MCP client reports an `EOF` error immediately:
+- **Fix**: Try running the command manually in your terminal to see the actual Python traceback:
+  ```bash
+  python3 mcp_server.py
+  ```
+  This will reveal if there are any immediate import errors or syntax mistakes in the code.

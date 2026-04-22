@@ -56,12 +56,13 @@ def read_tags(
     """
     payload = {
         "region": region,
-        "filters": filters or {},
         "resource": resource,
         "resources": resources,
         "regions": regions,
         "missing_tag": missing_tag
     }
+    if filters:
+        payload["filters"] = filters
     result = read_handler(payload, None)
     return result
 
@@ -94,7 +95,7 @@ def apply_governance(
     """
     Scan for untagged resources and attempt to apply governance tags (e.g., Creator).
     """
-    payload = {"region": region}
+    payload = {"action": "scan", "regions": [region]}
     result = gov_handler(payload, None)
     return result
 
@@ -127,9 +128,11 @@ def sync_tags(
         target_type: The type alias of the target resources (e.g., 'Subnet').
         region: AWS region.
     """
+    # Extract VPC ID from ARN (e.g. arn:aws:ec2:us-east-2:123456:vpc/vpc-abc123)
+    vpc_id = source_arn.split("/")[-1] if "/" in source_arn else source_arn
     payload = {
-        "source_arn": source_arn,
-        "target_type": target_type,
+        "action": "sync_vpc",
+        "vpc_id": vpc_id,
         "region": region
     }
     result = sync_handler(payload, None)

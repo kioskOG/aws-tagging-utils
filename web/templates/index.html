@@ -1,172 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AWS Tagging Utils - Governance Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AWS Tagging Dashboard</title>
   <style>
     :root {
       --bg: #030712;
-      --card-bg: rgba(17, 24, 39, 0.7);
-      --card-border: rgba(255, 255, 255, 0.08);
+      --surface: rgba(15, 23, 42, 0.4);
+      --surface-bright: rgba(30, 41, 59, 0.7);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --muted: #94a3b8;
       --accent: #3b82f6;
-      --accent-glow: rgba(59, 130, 246, 0.5);
-      --text: #f9fafb;
-      --muted: #9ca3af;
+      --accent-dim: #2563eb;
+      --accent-glow: rgba(59, 130, 246, 0.4);
+      --danger: #ef4444;
       --success: #10b981;
       --warning: #f59e0b;
-      --danger: #ef4444;
-      --mono: 'JetBrains Mono', monospace;
+      --radius: 16px;
+      --font: "Outfit", "Inter", system-ui, sans-serif;
+      --mono: "Fira Code", "IBM Plex Mono", monospace;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
 
     body {
-      font-family: 'Outfit', sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
+      margin: 0;
       min-height: 100vh;
-      overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(ellipse at top left, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
+        radial-gradient(ellipse at bottom right, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.6;
     }
 
-    .glass {
-      background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-    }
-
-    .container {
+    .app-container {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 2rem 1.5rem;
     }
 
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 3rem;
+      margin-bottom: 2.5rem;
     }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo-icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, var(--accent), #60a5fa);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 20px var(--accent-glow);
-    }
-
-    .logo-text {
-      font-weight: 800;
-      font-size: 1.5rem;
-      letter-spacing: -0.02em;
-      background: linear-gradient(to right, #fff, #9ca3af);
+    .brand h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin: 0;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa, #34d399);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
+      letter-spacing: -0.03em;
     }
 
-    .status-pill {
-      padding: 6px 14px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.2);
+    .brand p {
+      margin: 0.25rem 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      padding: 6px;
       border-radius: 100px;
-      font-size: 0.8rem;
-      color: var(--success);
+      border: 1px solid var(--border);
+      gap: 4px;
+      width: fit-content;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 0.6rem 1.5rem;
+      border-radius: 100px;
+      cursor: pointer;
       font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      background: var(--success);
-      border-radius: 50%;
-      box-shadow: 0 0 10px var(--success);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.4; }
-      100% { opacity: 1; }
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 350px 1fr;
-      gap: 2rem;
-    }
-
-    .sidebar {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-
-    .nav-card {
-      padding: 1.5rem;
-    }
-
-    .nav-item {
-      padding: 12px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--muted);
-      font-weight: 500;
-    }
-
-    .nav-item:hover {
-      background: rgba(255, 255, 255, 0.05);
+    .tab-btn:hover {
       color: var(--text);
     }
 
-    .nav-item.active {
-      background: rgba(59, 130, 246, 0.1);
-      color: var(--accent);
-      border: 1px solid rgba(59, 130, 246, 0.2);
+    .tab-btn.active {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 0 15px var(--accent-glow);
     }
 
-    .main-content {
-      display: flex;
-      flex-direction: column;
+    .main-grid {
+      display: grid;
+      grid-template-columns: 420px 1fr;
       gap: 2rem;
+      align-items: start;
     }
 
+    @media (max-width: 1024px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Elements */
     .card {
-      padding: 2rem;
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     }
 
     .section-title {
-      font-size: 1.25rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #93c5fd;
       font-weight: 700;
       margin-bottom: 1.5rem;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
     .field {
@@ -177,522 +170,1401 @@
       display: block;
       font-size: 0.85rem;
       font-weight: 600;
+      margin-bottom: 0.5rem;
       color: var(--muted);
-      margin-bottom: 8px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
-    select, input, textarea {
+    input,
+    textarea,
+    select {
       width: 100%;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
       color: var(--text);
+      border-radius: 10px;
+      padding: 0.8rem 1rem;
       font-family: inherit;
       font-size: 0.95rem;
-      transition: border-color 0.2s;
+      transition: all 0.2s;
     }
 
-    select:focus, input:focus, textarea:focus {
+    input:focus,
+    textarea:focus {
       outline: none;
       border-color: var(--accent);
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+      background: rgba(0, 0, 0, 0.4);
     }
 
+    textarea {
+      min-height: 150px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    /* Resource List */
+    .type-search-container {
+      position: relative;
+      margin-bottom: 0.75rem;
+    }
+
+    .type-list {
+      max-height: 280px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.5rem;
+    }
+
+    .type-item {
+      display: flex;
+      align-items: center;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      gap: 12px;
+    }
+
+    .type-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .type-item input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .type-item .label-group {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .type-item .friendly {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+
+    .type-item .aws-raw {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Custom Multi-Select */
+    .ms-container {
+      position: relative;
+      width: 100%;
+    }
+
+    .ms-header {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.5rem 0.75rem;
+      min-height: 50px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .ms-header:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .ms-header.focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .ms-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex: 1;
+      align-items: center;
+    }
+
+    .ms-tag {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 500;
+    }
+
+    .ms-tag-rm {
+      cursor: pointer;
+      opacity: 0.7;
+    }
+
+    .ms-tag-rm:hover {
+      opacity: 1;
+      color: #fff;
+    }
+
+    .ms-placeholder {
+      color: var(--muted);
+      font-size: 0.95rem;
+      padding-left: 4px;
+    }
+
+    .ms-arrow {
+      color: var(--muted);
+      margin-left: 10px;
+      transition: transform 0.2s;
+    }
+
+    .ms-container.open .ms-arrow {
+      transform: rotate(180deg);
+    }
+
+    .ms-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      animation: msSlideIn 0.2s Math.easeOut;
+    }
+
+    @keyframes msSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .ms-container.open .ms-dropdown {
+      display: flex;
+    }
+
+    .ms-controls {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .ms-list {
+      max-height: 250px;
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .ms-opt {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      gap: 12px;
+    }
+
+    .ms-opt:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .ms-opt input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+      cursor: pointer;
+      padding: 0;
+      margin: 0;
+      pointer-events: none;
+    }
+
+    .ms-opt-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ms-opt-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+
+    .ms-opt-id {
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 14px 24px;
+      padding: 0.8rem 1.5rem;
       border-radius: 10px;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
       border: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       font-family: inherit;
-      width: 100%;
     }
 
     .btn-primary {
-      background: var(--accent);
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
       color: white;
       box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
     }
 
     .btn-primary:hover {
-      background: #2563eb;
       transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+      filter: brightness(1.1);
     }
 
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.05);
+    .btn-success {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-success:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+      filter: brightness(1.1);
+    }
+
+    .btn-gov-style {
+      background: linear-gradient(135deg, #8b5cf6, #d946ef);
+      color: white;
+      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    }
+
+    .btn-gov-style:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+      filter: brightness(1.1);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       color: var(--text);
-      border: 1px solid var(--card-border);
     }
 
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
-    .tag-grid {
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      padding: 0.4rem 0.8rem;
+      font-size: 0.85rem;
+      border: none;
+      cursor: pointer;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+      filter: none;
+    }
+
+    /* Tags */
+    .tag-row {
       display: grid;
       grid-template-columns: 1fr 1fr 40px;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 8px;
+      margin-bottom: 8px;
     }
 
-    .remove-btn {
+    .tag-row .rm {
       background: rgba(239, 68, 68, 0.1);
+      border: none;
       color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.2);
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-size: 1.2rem;
+      transition: background 0.2s;
     }
 
-    .results-area {
-      flex: 1;
+    .tag-row .rm:hover {
+      background: rgba(239, 68, 68, 0.2);
     }
 
+    /* Table */
     .table-container {
-      width: 100%;
       overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
+      text-align: left;
       font-size: 0.9rem;
     }
 
     th {
-      text-align: left;
-      padding: 12px;
-      color: var(--muted);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 1rem;
       font-weight: 600;
-      border-bottom: 1px solid var(--card-border);
-      text-transform: uppercase;
+      color: var(--muted);
       font-size: 0.75rem;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
       letter-spacing: 0.05em;
     }
 
     td {
-      padding: 14px 12px;
-      border-bottom: 1px solid var(--card-border);
-    }
-
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
+      padding: 1rem;
+      border-top: 1px solid var(--border);
+      vertical-align: middle;
     }
 
     .arn-cell {
       font-family: var(--mono);
       font-size: 0.75rem;
-      color: #cbd5e1;
-      max-width: 400px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .status-badge {
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .status-badge.ok { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-    .status-badge.err { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
-
-    .tabs-header {
-      display: flex;
-      gap: 2rem;
-      border-bottom: 1px solid var(--card-border);
-      margin-bottom: 2rem;
-    }
-
-    .tab-btn {
-      padding: 12px 0;
       color: var(--muted);
+      word-break: break-all;
+      max-width: 400px;
+    }
+
+    .name-cell {
       font-weight: 600;
-      cursor: pointer;
-      position: relative;
-      transition: color 0.2s;
-    }
-
-    .tab-btn.active {
-      color: var(--accent);
-    }
-
-    .tab-btn.active::after {
-      content: '';
-      position: absolute;
-      bottom: -1px;
-      left: 0;
-      width: 100%;
-      height: 2px;
-      background: var(--accent);
-      box-shadow: 0 -2px 10px var(--accent-glow);
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    #json-output-container {
-      margin-top: 2rem;
-      display: none;
-    }
-
-    pre {
-      background: #000;
-      padding: 1.5rem;
-      border-radius: 12px;
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      line-height: 1.5;
-      overflow-x: auto;
-      border: 1px solid var(--card-border);
       color: #93c5fd;
     }
 
-    .multi-select {
-      max-height: 200px;
-      overflow-y: auto;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 8px;
+    .status-badge {
+      display: inline-flex;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      letter-spacing: 0.02em;
     }
 
-    .multi-select-item {
-      padding: 8px;
+    .status-badge.ok {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+
+    .status-badge.err {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .status-badge.info {
+      background: rgba(59, 130, 246, 0.1);
+      color: #93c5fd;
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+
+    /* Result Actions */
+    .result-header {
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.85rem;
-    }
-
-    .multi-select-item:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .multi-select-item input {
-      width: auto;
-    }
-
-    .loading-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+      margin-bottom: 1.25rem;
     }
 
     .empty-state {
+      padding: 8rem 2rem;
       text-align: center;
-      padding: 4rem 2rem;
       color: var(--muted);
     }
 
-    .empty-state-icon {
-      font-size: 3rem;
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
       margin-bottom: 1rem;
       opacity: 0.2;
+      color: #38bdf8;
     }
 
-    @media (max-width: 1000px) {
-      .layout { grid-template-columns: 1fr; }
-      .sidebar { order: 2; }
+    #json-output-container {
+      display: none;
+      margin-top: 1.5rem;
+    }
+
+    .loading-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Checkbox list generic */
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-container input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+      cursor: pointer;
+      margin: 0;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Toast */
+    #toast-container {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      backdrop-filter: blur(20px);
+      border: 1px solid;
+      min-width: 280px;
+      max-width: 420px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      animation: toastIn 0.3s ease;
+      pointer-events: all;
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .toast-success {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+
+    .toast-error {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .toast-info {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+
+    .stat-card {
+      flex: 1;
+      min-width: 250px;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(15, 23, 42, 0.8);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .stat-card:hover .stat-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      opacity: 0.8;
+    }
+
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .stat-card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+
+
+    .stat-value.blue {
+      color: #60a5fa;
+    }
+
+    .stat-value.green {
+      color: #34d399;
+    }
+
+    .stat-value.yellow {
+      color: #fbbf24;
+    }
+
+    .stat-value.purple {
+      color: #a78bfa;
+    }
+
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Compliance score ring */
+    .score-ring {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .ring-wrap {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      flex-shrink: 0;
+    }
+
+    .ring-wrap svg {
+      width: 120px;
+      height: 120px;
+      transform: rotate(-90deg);
+    }
+
+    .ring-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .ring-pct {
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .ring-sub {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .score-meta {
+      flex: 1;
+    }
+
+    .score-meta h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+
+    .score-meta p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin: 0;
+    }
+
+    /* Region section header */
+    .region-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .region-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .region-section-title h4 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #93c5fd;
+    }
+
+    .region-badge {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    /* Sync result */
+    .sync-resource-list {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 2;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* Tab badge */
+    .tab-badge {
+      background: rgba(239, 68, 68, 0.8);
+      color: white;
+      font-size: 0.6rem;
+      border-radius: 100px;
+      padding: 1px 6px;
+      margin-left: 4px;
+      font-weight: 700;
+    }
+
+    /* Premium Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(59, 130, 246, 0.2);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(59, 130, 246, 0.4);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    /* Card Animations */
+    .card {
+      transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(59, 130, 246, 0.3);
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Stats Animation */
+
+
+    .stat-card:hover
+
+    /* Table Improvements */
+    tr.filtered {
+      display: none;
+    }
+
+    .name-cell {
+      color: #60a5fa;
+      transition: color 0.2s;
+    }
+
+    tr:hover .name-cell {
+      color: #93c5fd;
+    }
+
+    /* Help Tooltip */
+    .help-icon {
+      display: inline-flex;
+      width: 14px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      font-size: 10px;
+      align-items: center;
+      justify-content: center;
+      margin-left: 4px;
+      cursor: help;
+      color: var(--muted);
+    }
+
+    .help-icon:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--text);
+    }
+
+    .btn:hover {
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .btn-success:hover {
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-gov-style:hover {
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+    }
+
+
+    .stat-card {
+      flex: 1;
+      min-width: 250px;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(15, 23, 42, 0.8);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .stat-card:hover .stat-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      opacity: 0.8;
     }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+    rel="stylesheet" />
 </head>
+
 <body>
-  <div class="container">
-    <header>
-      <div class="logo">
-        <div class="logo-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+  <div class="app-container">
+    <div id="toast-container"></div>
+    <div class="stats-bar" id="stats-bar" style="display:flex">
+      <div class="stat-card">
+        <div class="stat-icon blue">🔍</div>
+        <div class="stat-info">
+          <div class="stat-label">Discovered</div>
+          <div class="stat-value blue" id="stat-discovered">0</div>
+          <div class="stat-sub">last scan</div>
         </div>
-        <div class="logo-text">AWS Tagging Utils</div>
       </div>
-      <div class="status-pill">
-        <div class="status-dot"></div>
-        Cloud Connected
+      <div class="stat-card">
+        <div class="stat-icon green">🏷️</div>
+        <div class="stat-info">
+          <div class="stat-label">Session Tags</div>
+          <div class="stat-value green" id="stat-tagged">0</div>
+          <div class="stat-sub">write operations</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow">⚖️</div>
+        <div class="stat-info">
+          <div class="stat-label">Health Score</div>
+          <div class="stat-value yellow" id="stat-score">0%</div>
+          <div class="stat-sub">compliance</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">🛡️</div>
+        <div class="stat-info">
+          <div class="stat-label">Gov Actions</div>
+          <div class="stat-value purple" id="stat-gov">0</div>
+          <div class="stat-sub">auto-tagged</div>
+        </div>
+      </div>
+    </div>
+    <header>
+      <div class="brand">
+        <div style="display:flex; align-items:center; gap:12px">
+          <h1>AWS Tagging Dashboard</h1><button class="btn-ghost"
+            onclick="loadMeta(); toast('Refreshing metadata...', 'info')"
+            style="padding:4px; border:1px solid var(--border); border-radius:4px"
+            title="Refresh AWS Metadata">🔄</button>
+        </div>
+        <p>Enterprise Resource Governance & Discovery</p>
+      </div>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="read">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          Resource Discovery
+        </button>
+        <button type="button" class="tab-btn" data-tab="write">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+          Batch Tagging
+        </button>
+        <button type="button" class="tab-btn" data-tab="gov">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          Governance Scan
+        </button>
+        <button type="button" class="tab-btn" data-tab="report">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+          Compliance Report
+        </button>
+        <button type="button" class="tab-btn" data-tab="sync">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          VPC Tag Sync
+        </button>
       </div>
     </header>
 
-    <div class="layout">
-      <!-- SIDEBAR -->
-      <div class="sidebar">
-        <div class="glass nav-card">
-          <div class="nav-item active" data-tab="read">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            Resource Discovery
+    <div class="main-grid">
+      <!-- Sidebar / Config -->
+      <aside>
+        <!-- Read Panel Config -->
+        <div id="config-read" class="card config-panel active">
+          <div class="section-title">Query Parameters</div>
+
+          <div class="field">
+            <label>Regions</label>
+            <div id="read-region-picker"></div>
           </div>
-          <div class="nav-item" data-tab="report">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            Compliance Report
+
+          <div class="field">
+            <label>Service Selection</label>
+            <div class="type-search-container">
+              <input id="type-search" type="text" placeholder="Filter services..." />
+            </div>
+            <div class="type-list" id="type-list">
+              <!-- Dynamically populated -->
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+              <button class="btn-ghost" id="types-all">Select Visible</button>
+              <button class="btn-ghost" id="types-clear">Clear All</button>
+            </div>
           </div>
-          <div class="nav-item" data-tab="gov">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-            Governance & Auto-Tag
+
+          <div class="field" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+            <label class="checkbox-container">
+              <input type="checkbox" id="read-missing-tag-enable" />
+              <span style="color: var(--text);">Audit for Missing Tag</span>
+            </label>
+            <div id="missing-tag-group" style="display: none; margin-top: 12px;">
+              <input id="read-missing-tag-key" type="text" placeholder="e.g. Owner" />
+              <p style="font-size: 0.75rem; color: var(--muted); margin: 6px 0 0;">Find resources where this key is
+                blank or missing.</p>
+            </div>
           </div>
-          <div class="nav-item" data-tab="write">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            Batch Tagging
+
+          <div class="field">
+            <label>Tag Filtering (AND)</label>
+            <div id="read-filters"></div>
+            <button class="btn-ghost" id="add-read-filter">+ Add Filter Rule</button>
           </div>
-          <div class="nav-item" data-tab="sync">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-            VPC Tag Propagator
-          </div>
+
+          <button class="btn btn-primary" id="btn-read" style="width: 100%; height: 50px; font-size: 1rem;">
+            Run Discovery Scan
+          </button>
         </div>
 
-        <div class="glass card" id="config-panel">
-          <!-- Discovery Config -->
-          <div id="cfg-read" class="tab-cfg active">
-            <div class="section-title">Discovery Filters</div>
-            <div class="field">
-              <label>Target Region</label>
-              <select id="read-region" class="region-picker"></select>
-            </div>
-            <div class="field">
-              <label>Resource Type</label>
-              <select id="read-resource"></select>
-            </div>
-            <div class="field">
-              <label>Tag Filters</label>
-              <div id="read-filters"></div>
-              <button class="btn btn-secondary" style="padding: 8px; font-size: 0.8rem;" onclick="addTagRow('read-filters')">+ Add Filter</button>
-            </div>
-            <div class="field" style="margin-top: 2rem;">
-              <button class="btn btn-primary" id="btn-read">Search Infrastructure</button>
-            </div>
+        <!-- Write Panel Config -->
+        <div id="config-write" class="card config-panel" style="display: none;">
+          <div class="section-title">Tag Operations</div>
+
+          <div class="field">
+            <label>Target Regions</label>
+            <div id="write-region-picker"></div>
+          </div>
+          <div class="field">
+            <div style="display:flex; justify-content:space-between; align-items:center"><label
+                for="write-arns">Resource Inventory (ARNs)</label><button class="btn-ghost"
+                onclick="document.getElementById('write-arns').value=''; toast('Inventory cleared', 'info')"
+                style="font-size:0.7rem">Clear</button></div>
+            <textarea id="write-arns" placeholder="Paste ARNs here (one per line)..."></textarea>
+            <p style="font-size: 0.75rem; color: var(--muted); margin-top: 6px;">Supports mixed resource types in one
+              batch.</p>
           </div>
 
-          <!-- Report Config -->
-          <div id="cfg-report" class="tab-cfg">
-            <div class="section-title">Compliance Audit</div>
-            <div class="field">
-              <label>Audit Regions</label>
-              <div id="report-regions" class="multi-select"></div>
-            </div>
-            <div class="field">
-              <label>Mandatory Tag Keys</label>
-              <input type="text" id="report-mandatory" placeholder="Owner, Environment, CostCenter">
-            </div>
-            <div class="field">
-              <label>S3 Export Bucket (Optional)</label>
-              <input type="text" id="report-bucket" placeholder="my-compliance-reports">
-            </div>
-            <div class="field" style="margin-top: 2rem;">
-              <button class="btn btn-primary" id="btn-report">Generate Health Report</button>
-            </div>
+          <div class="field">
+            <label>Overwrite / New Tags</label>
+            <div id="write-tags"></div>
+            <button class="btn-ghost" id="add-write-tag">+ Add Tag Metadata</button>
           </div>
 
-          <!-- Governance Config -->
-          <div id="cfg-gov" class="tab-cfg">
-            <div class="section-title">Compliance & Auto-Tagging</div>
-            <div class="field">
-              <label>Target Regions</label>
-              <div id="gov-regions" class="multi-select"></div>
-            </div>
-            <div class="field">
-              <label>Resource Types (Optional Filter)</label>
-              <div id="gov-types" class="multi-select" style="height: 150px;"></div>
-            </div>
-            <div class="field">
-              <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
-                This will scan the selected regions for resources missing the <b>Owner</b> tag and attempt to identify their creators via
-                CloudTrail history to apply the tag automatically.
-              </p>
-            </div>
-            <div class="field">
-              <button class="btn btn-primary" id="btn-gov">Run Auto-Tagging Scan</button>
-            </div>
-          </div>
-
-          <!-- Batch Write Config -->
-          <div id="cfg-write" class="tab-cfg">
-            <div class="section-title">Batch Metadata Write</div>
-            <div class="field">
-              <label>Target Regions</label>
-              <div id="write-regions" class="multi-select"></div>
-            </div>
-            <div class="field">
-              <label>Resource Inventory (ARNs)</label>
-              <textarea id="write-arns" rows="6" style="font-family: var(--mono); font-size: 0.75rem;" placeholder="arn:aws:ec2:us-east-1:123456789012:instance/i-0abc..."></textarea>
-            </div>
-            <div class="field">
-              <label>New Metadata (Tags)</label>
-              <div id="write-tags"></div>
-              <button class="btn btn-secondary" style="padding: 8px; font-size: 0.8rem;" onclick="addTagRow('write-tags')">+ Add Tag</button>
-            </div>
-            <div class="field" style="margin-top: 2rem;">
-              <button class="btn btn-primary" id="btn-write">Commit Batch Changes</button>
-            </div>
-          </div>
-
-          <!-- Sync Config -->
-          <div id="cfg-sync" class="tab-cfg">
-            <div class="section-title">VPC Tag Propagator</div>
-            <div class="field">
-              <label>Target Region</label>
-              <select id="sync-region" class="region-picker"></select>
-            </div>
-            <div class="field">
-              <label>Parent VPC ID</label>
-              <input type="text" id="sync-vpc-id" placeholder="vpc-0a1b2c3d...">
-            </div>
-            <div class="field">
-              <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
-                Propagates tags from the parent VPC to all child resources (Subnets, Security Groups, NAT Gateways, etc.).
-              </p>
-            </div>
-            <div class="field">
-              <button class="btn btn-primary" id="btn-sync">Propagate VPC Tags</button>
-            </div>
-          </div>
+          <button class="btn btn-success" id="btn-write" style="width: 100%; height: 50px; font-size: 1rem;">
+            Commit Batch Changes
+          </button>
         </div>
-      </div>
 
-      <!-- MAIN AREA -->
-      <div class="main-content">
-        <div class="glass results-area">
+        <!-- Gov Panel Config -->
+        <div id="config-gov" class="card config-panel" style="display: none;">
+          <div class="section-title">Compliance & Auto-Tagging</div>
+
+          <div class="field">
+            <label>Target Regions</label>
+            <div id="gov-region-picker"></div>
+          </div>
+
+          <div class="field">
+            <label>Resource Types (Optional Filter)</label>
+            <div class="type-search-container">
+              <input type="text" id="gov-type-search" placeholder="Search resource types... (e.g. EC2)" />
+            </div>
+            <div class="type-list" id="gov-type-list"></div>
+          </div>
+
+          <div class="field">
+            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
+              This will scan the selected regions for untagged resources and attempt to identify their owners via
+              CloudTrail history to apply the <b>Owner</b> tag automatically.
+            </p>
+          </div>
+
+          <button class="btn btn-gov-style" id="btn-gov" style="width: 100%; height: 50px; font-size: 1rem;">
+            Run Auto-Tagging Scan
+          </button>
+        </div>
+        <!-- Report Panel Config -->
+        <div id="config-report" class="card config-panel" style="display: none;">
+          <div class="section-title">Compliance Audit</div>
+          <div class="field">
+            <label>Audit Regions</label>
+            <div id="report-region-picker"></div>
+          </div>
+          <div class="field">
+            <label for="report-mandatory">Mandatory Tag Keys</label>
+            <input id="report-mandatory" type="text" placeholder="Owner, Environment, CostCenter"
+              value="Owner,Environment,CostCenter">
+          </div>
+          <div class="field">
+            <label for="report-bucket">S3 Export Bucket (Optional)</label>
+            <input id="report-bucket" type="text" placeholder="my-compliance-reports-bucket">
+          </div>
+          <button class="btn btn-primary" id="btn-report"
+            style="width: 100%; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#f59e0b,#ef4444);">
+            Generate Compliance Report
+          </button>
+        </div>
+
+        <!-- Sync Panel Config -->
+        <div id="config-sync" class="card config-panel" style="display: none;">
+          <div class="section-title">VPC Tag Propagation</div>
+          <div class="field">
+            <label>Target Region</label>
+            <div id="sync-region-picker"></div>
+          </div>
+          <div class="field">
+            <label for="sync-vpc-id">Parent VPC ID</label>
+            <input id="sync-vpc-id" type="text" placeholder="vpc-0a1b2c3d4e5f67890">
+          </div>
+          <div class="field"
+            style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; font-size: 0.85rem; color: var(--muted);">
+            Propagates all tags from the parent VPC to its child resources — Subnets, Security Groups, Route Tables,
+            Internet Gateways, and NAT Gateways.
+          </div>
+          <button class="btn btn-primary" id="btn-sync"
+            style="width: 100%; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#06b6d4,#3b82f6);">
+            Propagate VPC Tags
+          </button>
+        </div>
+      </aside>
+
+      <!-- Results Area -->
+      <main>
+        <div id="results-view" class="card" style="min-height: 500px;">
+          <div class="result-header">
+            <div class="section-title" id="results-title" style="margin-bottom: 0;">Operational View</div>
+            <div id="result-actions" style="display: none; gap: 8px;">
+              <input type="text" id="table-filter" placeholder="Filter results..."
+                style="width: 200px; padding: 0.5rem; font-size: 0.8rem; height: 36px; margin: 0;">
+              <button class="btn btn-outline" id="btn-export-csv"
+                style="padding: 0 12px; height: 36px; font-size: 0.8rem;">Export CSV</button>
+              <button class="btn btn-outline" id="btn-transfer"
+                style="background: rgba(94, 165, 250, 0.1); border-color: rgba(94, 165, 250, 0.3); color: #60a5fa;">
+                Transfer to Batch Writer →
+              </button>
+            </div>
+          </div>
+
           <div id="result-content">
             <div class="empty-state">
-              <div class="empty-state-icon">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-              </div>
-              <h3>Infrastructure Ready</h3>
-              <p>Configure filters on the left and run a search to see your AWS resources.</p>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <p>Configure your criteria in the sidebar to scan for AWS resources.</p>
             </div>
           </div>
 
           <div id="json-output-container">
-            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h4 style="font-size: 0.8rem; color: var(--muted); text-transform: uppercase;">API Debug Output</h4>
-              <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.7rem;" id="toggle-json">Hide JSON Debug</button>
-            </div>
-            <pre id="output">{}</pre>
+            <label style="display: block; margin-bottom: 10px; font-size: 0.8rem; color: var(--warning);">DEBUG: API Raw
+              Data</label>
+            <pre id="output" style="background: #000; color: #0f0; border: 1px solid #333;"></pre>
           </div>
+          <button class="btn-ghost" id="toggle-json" style="margin-top: 1.5rem; display: none;">Toggle Developer JSON
+            View</button>
         </div>
-      </div>
+      </main>
     </div>
   </div>
 
   <script>
-    const $ = s => document.querySelector(s);
-    const $$ = s => document.querySelectorAll(s);
+    const AWS_REGIONS = [
+      { id: 'us-east-1', name: 'N. Virginia' }, { id: 'us-east-2', name: 'Ohio' },
+      { id: 'us-west-1', name: 'N. California' }, { id: 'us-west-2', name: 'Oregon' },
+      { id: 'ap-south-1', name: 'Mumbai' }, { id: 'ap-northeast-3', name: 'Osaka' },
+      { id: 'ap-northeast-2', name: 'Seoul' }, { id: 'ap-southeast-1', name: 'Singapore' },
+      { id: 'ap-southeast-2', name: 'Sydney' }, { id: 'ap-northeast-1', name: 'Tokyo' },
+      { id: 'ca-central-1', name: 'Central' }, { id: 'eu-central-1', name: 'Frankfurt' },
+      { id: 'eu-west-1', name: 'Ireland' }, { id: 'eu-west-2', name: 'London' },
+      { id: 'eu-west-3', name: 'Paris' }, { id: 'eu-north-1', name: 'Stockholm' },
+      { id: 'sa-east-1', name: 'São Paulo' }
+    ];
 
-    let state = {
-      activeTab: 'read',
+    const state = {
+      resourceMap: {},
       lastResults: [],
-      regions: { read: 'us-east-1', report: [], gov: [], write: [] },
+      selectedTab: 'read',
+      regions: { read: [], write: [], gov: [] },
       types: { gov: [] }
     };
 
+    class RegionPicker {
+      constructor(containerId, tabKey, defaultAll = false) {
+        this.container = document.getElementById(containerId);
+        this.tabKey = tabKey;
+        this.selected = defaultAll ? AWS_REGIONS.map(r => r.id) : ['ap-southeast-1'];
+        this.render();
+      }
+
+      render() {
+        let html = `
+            <div class="ms-container" id="msc-${this.tabKey}">
+                <div class="ms-header" onclick="document.getElementById('msc-${this.tabKey}').classList.toggle('open')">
+                    <div class="ms-tags">
+                       ${this.selected.length === AWS_REGIONS.length ? `<span class="ms-tag">All Regions</span>` :
+            this.selected.length === 0 ? `<span class="ms-placeholder">Select regions...</span>` :
+              this.selected.slice(0, 3).map(id => {
+                const r = AWS_REGIONS.find(x => x.id === id);
+                return `<span class="ms-tag">${r ? r.name : id}</span>`;
+              }).join('') + (this.selected.length > 3 ? `<span class="ms-tag">+${this.selected.length - 3}</span>` : '')
+          }
+                    </div>
+                    <div class="ms-arrow">▼</div>
+                </div>
+                <div class="ms-dropdown">
+                    <div class="ms-controls">
+                        <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
+                        <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
+                    </div>
+                    <div class="ms-list">
+                        ${AWS_REGIONS.map(r => `
+                            <div class="ms-opt" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].toggle('${r.id}')">
+                                <input type="checkbox" ${this.selected.includes(r.id) ? 'checked' : ''} style="pointer-events:none">
+                                <div class="ms-opt-text">
+                                    <span class="ms-opt-name">${r.name}</span>
+                                    <span class="ms-opt-id">${r.id}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+            `;
+        this.container.innerHTML = html;
+        state.regions[this.tabKey] = this.selected.length === AWS_REGIONS.length ? ['all'] : this.selected;
+      }
+
+      toggle(id) {
+        if (this.selected.includes(id)) {
+          this.selected = this.selected.filter(x => x !== id);
+        } else {
+          this.selected.push(id);
+        }
+        this.render();
+        document.getElementById(`msc-${this.tabKey}`).classList.add('open');
+      }
+
+      selectAll(isAll) {
+        this.selected = isAll ? AWS_REGIONS.map(r => r.id) : [];
+        this.render();
+        document.getElementById(`msc-${this.tabKey}`).classList.add('open');
+      }
+    }
+
+    const regionPickers = {};
+
+    document.addEventListener('click', (e) => {
+      ['read', 'write', 'gov'].forEach(tab => {
+        const msc = document.getElementById(`msc-${tab}`);
+        if (msc && !msc.contains(e.target)) { msc.classList.remove('open'); }
+      });
+    });
+
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    // Initial Load
     async function loadMeta() {
       try {
-        const res = await fetch("/api/meta");
-        const data = await res.json();
-        
-        // Regions
-        $$('.region-picker').forEach(el => {
-          el.innerHTML = data.regions.map(r => `<option value="${r}">${r}</option>`).join('');
+        const r = await fetch("/api/meta/resource-types");
+        const data = await r.json();
+        state.resourceMap = data.map || {};
+        renderTypeList();
+        renderGovTypeList();
+        regionPickers['read'] = new RegionPicker('read-region-picker', 'read', false);
+        regionPickers['write'] = new RegionPicker('write-region-picker', 'write', false);
+        regionPickers['gov'] = new RegionPicker('gov-region-picker', 'gov', true);
+      } catch (e) {
+        console.error("Critical Metadata Failure", e);
+      }
+    }
+
+    function renderTypeList(filter = '') {
+      const list = $('#type-list');
+      list.innerHTML = '';
+      const query = filter.toLowerCase();
+
+      Object.entries(state.resourceMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([friendly, raw]) => {
+          if (query && !friendly.toLowerCase().includes(query) && !raw.toLowerCase().includes(query)) return;
+
+          const div = document.createElement('div');
+          div.className = 'type-item';
+          div.innerHTML = `
+            <input type="checkbox" value="${friendly}">
+            <div class="label-group">
+              <span class="friendly">${friendly}</span>
+              <span class="aws-raw">${raw}</span>
+            </div>
+          `;
+          div.onclick = (e) => {
+            if (e.target.tagName !== 'INPUT') {
+              const cb = div.querySelector('input');
+              cb.checked = !cb.checked;
+            }
+          };
+          list.appendChild(div);
         });
-        
-        // Multi-region pickers
-        ['report', 'gov', 'write'].forEach(tab => {
-          const container = $(`#${tab}-regions`);
-          if (container) {
-            container.innerHTML = data.regions.map(r => `
-              <div class="multi-select-item">
-                <input type="checkbox" value="${r}" onchange="updateSelectedRegions('${tab}', this)">
-                <span>${r}</span>
-              </div>
-            `).join('');
-          }
+    }
+
+    function renderGovTypeList(filter = '') {
+      const list = $('#gov-type-list');
+      if (!list) return;
+      list.innerHTML = '';
+      const query = filter.toLowerCase();
+
+      Object.entries(state.resourceMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([friendly, raw]) => {
+          if (query && !friendly.toLowerCase().includes(query) && !raw.toLowerCase().includes(query)) return;
+
+          const div = document.createElement('div');
+          div.className = 'type-item';
+          div.innerHTML = `
+            <input type="checkbox" data-id="${raw}" ${state.types.gov.includes(raw) ? 'checked' : ''}>
+            <div class="label-group">
+              <span class="friendly">${friendly}</span>
+              <span class="aws-raw">${raw}</span>
+            </div>
+          `;
+          div.onclick = (e) => {
+            if (e.target.tagName !== 'INPUT') {
+              const cb = div.querySelector('input');
+              cb.checked = !cb.checked;
+              cb.dispatchEvent(new Event('change'));
+            }
+          };
+          div.querySelector('input').onchange = (e) => {
+            if (e.target.checked) {
+              if (!state.types.gov.includes(raw)) state.types.gov.push(raw);
+            } else {
+              state.types.gov = state.types.gov.filter(x => x !== raw);
+            }
+          };
+          list.appendChild(div);
         });
-
-        // Resource Types
-        $('#read-resource').innerHTML = Object.keys(data.resource_map).map(k => `<option value="${k}">${k}</option>`).join('');
-        
-        // Gov Types
-        $('#gov-types').innerHTML = Object.keys(data.resource_map).map(k => `
-          <div class="multi-select-item">
-            <input type="checkbox" value="${k}" onchange="updateSelectedTypes('gov', this)">
-            <span><b>${k}</b> <br><small style="color:var(--muted); font-size:0.7rem;">${data.resource_map[k]}</small></span>
-          </div>
-        `).join('');
-
-      } catch (e) { console.error("Meta load error", e); }
     }
 
-    function updateSelectedRegions(tab, el) {
-      if (!Array.isArray(state.regions[tab])) state.regions[tab] = [];
-      if (el.checked) state.regions[tab].push(el.value);
-      else state.regions[tab] = state.regions[tab].filter(v => v !== el.value);
+    $('#type-search').oninput = (e) => renderTypeList(e.target.value);
+    $('#gov-type-search').oninput = (e) => renderGovTypeList(e.target.value);
+    $('#types-all').onclick = () => $$('#type-list input').forEach(i => i.checked = true);
+    $('#types-clear').onclick = () => $$('#type-list input').forEach(i => i.checked = false);
+
+    function addTagRow(containerId) {
+      const row = document.createElement('div');
+      row.className = 'tag-row';
+      row.innerHTML = `<input type="text" placeholder="Key" class="tag-key"><input type="text" placeholder="Value" class="tag-val"><button class="rm">✕</button>`;
+      row.querySelector('.rm').onclick = () => row.remove();
+      $(`#${containerId}`).appendChild(row);
     }
 
-    function updateSelectedTypes(tab, el) {
-      if (!Array.isArray(state.types[tab])) state.types[tab] = [];
-      if (el.checked) state.types[tab].push(el.value);
-      else state.types[tab] = state.types[tab].filter(v => v !== el.value);
-    }
+    $('#add-read-filter').onclick = () => addTagRow('read-filters');
+    $('#add-write-tag').onclick = () => addTagRow('write-tags');
 
-    // Sidebar Tab Switching
-    $$('.nav-item').forEach(item => {
-      item.onclick = () => {
-        const tab = item.dataset.tab;
-        state.activeTab = tab;
-        
-        $$('.nav-item').forEach(i => i.classList.remove('active'));
-        item.classList.add('active');
-
-        $$('.tab-cfg').forEach(c => c.classList.remove('active'));
-        $(`#cfg-${tab}`).classList.add('active');
-        
-        // Show result content if hidden
-        $('#result-content').style.display = 'block';
-        $('#json-output-container').style.display = 'block';
+    // Tab Switching
+    $$('.tab-btn').forEach(btn => {
+      btn.onclick = () => {
+        const tab = btn.dataset.tab;
+        state.selectedTab = tab;
+        $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+        $$('.config-panel').forEach(p => p.style.display = p.id === `config-${tab}` ? 'block' : 'none');
       };
     });
 
-    function addTagRow(containerId) {
-      const container = $(`#${containerId}`);
-      const row = document.createElement('div');
-      row.className = 'tag-grid';
-      row.innerHTML = `
-        <input type="text" class="tag-key" placeholder="Key">
-        <input type="text" class="tag-val" placeholder="Value">
-        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
-      `;
-      container.appendChild(row);
-    }
+    $('#read-missing-tag-enable').onchange = (e) => {
+      $('#missing-tag-group').style.display = e.target.checked ? 'block' : 'none';
+    };
 
     $('#btn-read').onclick = async () => {
       const btn = $('#btn-read');
+      const types = Array.from($$('#type-list input:checked')).map(i => i.value);
+      if (!types.length) return alert("Please select at least one AWS Service.");
+
       btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Querying AWS...';
-      
+      btn.innerHTML = '<div class="loading-spinner"></div> Initializing Scan...';
+
       const filters = {};
       $$('#read-filters .tag-row').forEach(row => {
         const k = row.querySelector('.tag-key').value.trim();
@@ -701,10 +1573,14 @@
       });
 
       const payload = {
-        region: $('#read-region').value,
-        resource: $('#read-resource').value,
-        filters: filters
+        resources: types,
+        filters: filters,
+        regions: state.regions['read']
       };
+
+      if ($('#read-missing-tag-enable').checked) {
+        payload.missing_tag = $('#read-missing-tag-key').value;
+      }
 
       try {
         const res = await fetch("/api/read", {
@@ -713,57 +1589,43 @@
           body: JSON.stringify(payload)
         });
         const data = await res.json();
-        renderReadResults(data);
+        renderResults(data);
       } catch (e) {
         alert("Discovery failed: " + e.message);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = 'Search Infrastructure';
+        btn.innerHTML = 'Run Discovery Scan';
       }
     };
 
-    function renderReadResults(data) {
+    function renderResults(data) {
       const container = $('#result-content');
+      const actionHeader = $('#result-actions');
       const output = $('#output');
-      output.textContent = JSON.stringify(data, null, 2);
 
-      if (data.error) {
-        container.innerHTML = `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger)">Error: ${data.error}</div></div>`;
+      output.textContent = JSON.stringify(data, null, 2);
+      $('#toggle-json').style.display = 'block';
+
+      const resources = data.resources || [];
+      state.lastResults = resources;
+      document.getElementById('stat-discovered').textContent = resources.length;
+      document.getElementById('stats-bar').style.display = 'flex';
+
+      if (!resources.length) {
+        actionHeader.style.display = 'none';
+        container.innerHTML = `<div class="empty-state"><p>Zero resources found matching your specified filters.</p></div>`;
         return;
       }
 
-      state.lastResults = data.resources || [];
-      let html = `
-        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <div class="section-title">Discovered Resources (${state.lastResults.length})</div>
-          <button class="btn btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.8rem;" id="btn-transfer">Transfer Selected to Write</button>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 40px;"><input type="checkbox" id="select-all-results"></th>
-                <th>Resource Name</th>
-                <th>ARN</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${state.lastResults.map((r, i) => `
-                <tr>
-                  <td><input type="checkbox" class="result-check" data-idx="${i}"></td>
-                  <td style="font-weight:600">${r.Name}</td>
-                  <td class="arn-cell">${r.ResourceARN}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
+      actionHeader.style.display = 'block';
+      let html = `<div class="table-container"><table><thead><tr><th style="width: 40px"><input type="checkbox" id="select-all-results"></th><th>Resource Name</th><th>ARN</th><th>Tags</th></tr></thead><tbody>`;
 
-      if (!state.lastResults.length) {
-        html = `<div class="empty-state">No resources matched your filters in ${data.region || 'the region'}.</div>`;
-      }
+      resources.forEach((r, idx) => {
+        const tags = Object.entries(r.Tags || {}).map(([k, v]) => `<span class="status-badge info">${k}: ${v}</span>`).join('');
+        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${r.Name || '---'}</td><td class="arn-cell">${r.ResourceARN} <span class="help-icon" style="cursor:pointer; background:none" onclick="navigator.clipboard.writeText('${r.ResourceARN}'); toast('ARN Copied', 'success')">📋</span></td><td>${tags}</td></tr>`;
+      });
 
+      html += `</tbody></table></div>`;
       container.innerHTML = html;
 
       $('#select-all-results').onclick = (e) => {
@@ -841,6 +1703,10 @@
         html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger); font-weight:700">⚠ Partial Failures (${failedArns.length})</div><table style="margin-top:12px; font-size:0.8rem;">${failedArns.map(a => `<tr><td class="arn-cell">${a}</td><td style="color:var(--danger)">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td></tr>`).join('')}</table></div>`;
       }
 
+      document.getElementById('stat-tagged').textContent = (data.count || 0);
+      document.getElementById('stats-bar').style.display = 'flex';
+      const writeMsg = failedArns.length ? `Tagged ${data.count || 0} resources (${failedArns.length} failed)` : `Successfully tagged ${data.count || 0} resources`;
+      toast(writeMsg, failedArns.length ? 'error' : 'success');
       container.innerHTML = html;
     }
 
@@ -888,7 +1754,6 @@
       Object.entries(regionData).forEach(([reg, res]) => {
         const tagged = res.tagged || [];
         const failed = res.failed || {};
-        const unidentified = res.unidentified || [];
         const failedArns = Object.keys(failed);
 
         html += `<div style="margin-bottom: 24px;">
@@ -899,21 +1764,6 @@
             <div style="color:var(--success); font-weight:700; margin-bottom: 8px;">✓ Automatically Tagged (${tagged.length})</div>
             <div style="font-family: var(--mono); font-size:0.75rem; color: #cbd5e1; line-height:1.6; word-break: break-all;">
               ${tagged.join('<br>')}
-            </div>
-          </div>`;
-        }
-
-        if (unidentified.length) {
-          html += `<div class="card" style="border-color: rgba(245, 158, 11, 0.4); margin-bottom:1rem; padding: 1rem; background: rgba(245, 158, 11, 0.05);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <div style="color:var(--warning); font-weight:700;">⚠ Identified But No Owner Found (${unidentified.length})</div>
-              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.7rem; width: auto;" onclick="transferGovToBatch('${reg}')">Transfer to Batch Fix</button>
-            </div>
-            <div style="font-size: 0.8rem; color: var(--muted); margin-bottom: 10px;">
-              These resources are missing the <b>Owner</b> tag, but no creation events were found in CloudTrail history (last 90 days).
-            </div>
-            <div style="font-family: var(--mono); font-size:0.75rem; color: #cbd5e1; line-height:1.6; word-break: break-all;">
-              ${unidentified.join('<br>')}
             </div>
           </div>`;
         }
@@ -932,178 +1782,248 @@
           </div>`;
         }
 
-        if (!tagged.length && !failedArns.length && !unidentified.length) {
-          html += `<div style="font-size: 0.85rem; color: var(--muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">No resources missing tags were found.</div>`;
+        if (!tagged.length && !failedArns.length) {
+          html += `<div style="font-size: 0.85rem; color: var(--muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">No untagged resources found or identified.</div>`;
         }
         html += `</div>`;
       });
 
       container.innerHTML = html;
-      state.lastGovResults = data;
     }
 
-    window.transferGovToBatch = (region) => {
-      const res = state.lastGovResults.regions[region];
-      const arns = res.unidentified || [];
-      if (!arns.length) return;
+    // Toast notifications
+    function toast(msg, type = 'info') {
+      const tc = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = `toast toast-${type}`;
+      const icons = { success: '✓', error: '✕', info: 'ℹ' };
+      el.innerHTML = `<span style="font-size:1.1rem">${icons[type] || 'ℹ'}</span><span>${msg}</span>`;
+      tc.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
 
-      $('#write-arns').value = arns.join('\n');
-      
-      // Select the "Batch Tagging" tab
-      $$('.nav-item').forEach(i => i.classList.remove('active'));
-      const batchTab = Array.from($$('.nav-item')).find(b => b.dataset.tab === 'write');
-      batchTab.classList.add('active');
-      $$('.tab-cfg').forEach(c => c.classList.remove('active'));
-      $('#cfg-write').classList.add('active');
+    // Report tab
+    regionPickers['report'] = null;
+    regionPickers['sync'] = null;
 
-      // Pre-fill Owner tag row if not exists
-      const rows = $$('#write-tags .tag-grid');
-      let ownerRow = Array.from(rows).find(r => r.querySelector('.tag-key').value === 'Owner');
-      if (!ownerRow) {
-        addTagRow('write-tags');
-        const newRows = $$('#write-tags .tag-grid');
-        ownerRow = newRows[newRows.length - 1];
-        ownerRow.querySelector('.tag-key').value = 'Owner';
+    document.querySelector('[data-tab="report"]').addEventListener('click', () => {
+      if (!regionPickers['report']) {
+        regionPickers['report'] = new RegionPicker('report-region-picker', 'report', true);
       }
-      ownerRow.querySelector('.tag-val').focus();
-    };
+    });
+    document.querySelector('[data-tab="sync"]').addEventListener('click', () => {
+      if (!regionPickers['sync']) {
+        regionPickers['sync'] = new RegionPicker('sync-region-picker', 'sync', false);
+      }
+    });
 
-    $('#btn-report').onclick = async () => {
-      const btn = $('#btn-report');
+    document.getElementById('btn-report').onclick = async () => {
+      const btn = document.getElementById('btn-report');
       btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Auditing Compliance...';
-      
+      btn.innerHTML = '<div class="loading-spinner"></div> Auditing…';
       const payload = {
-        regions: state.regions['report'],
-        mandatory_tags: $('#report-mandatory').value.split(',').map(s => s.trim()).filter(s => s),
-        export_bucket: $('#report-bucket').value.trim() || null
+        regions: state.regions['report'] || [],
+        mandatory_tags: document.getElementById('report-mandatory').value.split(',').map(s => s.trim()).filter(s => s),
+        export_bucket: document.getElementById('report-bucket').value.trim() || null
       };
-
       try {
-        const res = await fetch("/api/report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json();
+        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+        document.getElementById('toggle-json').style.display = 'block';
         renderReportResults(data);
-      } catch (e) {
-        alert("Report generation failed: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Generate Health Report';
-      }
+      } catch (e) { toast('Report generation failed: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.innerHTML = 'Generate Compliance Report'; }
     };
 
     function renderReportResults(data) {
-      const container = $('#result-content');
-      const output = $('#output');
-      output.textContent = JSON.stringify(data, null, 2);
-
       const summary = data.summary || {};
       const score = summary.compliance_score !== undefined ? summary.compliance_score : 0;
-      const color = score > 80 ? 'var(--success)' : score > 50 ? 'var(--warning)' : 'var(--danger)';
-
-      let html = `<div class="section-title">Tagging Health Scorecard</div>
-        <div class="card" style="text-align: center; margin-bottom: 2rem; border-color: ${color}; background: rgba(0,0,0,0.2);">
-          <div style="font-size: 3rem; font-weight: 800; color: ${color}">${score}%</div>
-          <div style="color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem;">Overall Compliance</div>
-        </div>
-      `;
-
-      const regions = data.regions || {};
-      Object.entries(regions).forEach(([reg, res]) => {
-        const regScore = res.compliance_score !== undefined ? res.compliance_score : 0;
-        html += `<div style="margin-bottom: 20px;">
-          <h4 style="color: #93c5fd; margin-bottom: 8px;">${reg} (${regScore}%)</h4>
-          <div class="table-container">
-            <table>
-              <thead><tr><th>Resource</th><th>Missing Tags</th></tr></thead>
-              <tbody>
-                ${(res.resources || []).filter(r => !r.IsCompliant).map(r => `
-                  <tr>
-                    <td class="arn-cell">${r.ResourceARN}</td>
-                    <td>${r.MissingTags.map(t => `<span class="status-badge err">${t}</span>`).join('')}</td>
-                  </tr>
-                `).join('')}
-                ${!res.resources?.some(r => !r.IsCompliant) ? '<tr><td colspan="2" style="text-align:center; color:var(--success)">100% Compliant</td></tr>' : ''}
-              </tbody>
-            </table>
+      document.getElementById('stat-score').textContent = score + '%';
+      document.getElementById('stats-bar').style.display = 'flex';
+      const col = score > 80 ? '#34d399' : score > 50 ? '#fbbf24' : '#f87171';
+      const circ = 2 * Math.PI * 44;
+      const dash = (score / 100) * circ;
+      let html = `
+        <div class="score-ring">
+          <div class="ring-wrap">
+            <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/><circle cx="50" cy="50" r="44" fill="none" stroke="${col}" stroke-width="8" stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/></svg>
+            <div class="ring-label"><span class="ring-pct" style="color:${col}">${score}%</span><span class="ring-sub">Compliant</span></div>
+          </div>
+          <div class="score-meta">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start">
+              <h3 style="color:${col}; margin:0">Compliance Scorecard</h3>
+              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:8px 16px; font-size:0.8rem; background:linear-gradient(135deg,#60a5fa,#3b82f6)">Transfer to Batch Fix</button>
+            </div>
+            <p>${summary.compliant || 0} of ${summary.total_resources || 0} resources fully tagged<br>
+               <span style="color:var(--danger)">${summary.non_compliant || 0} resources</span> need attention</p>
           </div>
         </div>`;
+      Object.entries(data.regions || {}).forEach(([reg, res]) => {
+        const regScore = res.compliance_score !== undefined ? res.compliance_score : 0;
+        const rc = regScore > 80 ? 'var(--success)' : regScore > 50 ? 'var(--warning)' : 'var(--danger)';
+        const nonCompliant = (res.resources || []).filter(r => !r.IsCompliant);
+        html += `<div class="region-section">
+          <div class="region-section-title">
+            <h4>${reg}</h4>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:0.8rem;color:${rc};font-weight:700">${regScore}%</span>
+              <span class="region-badge">${nonCompliant.length} issues</span>
+            </div>
+          </div>`;
+        if (nonCompliant.length) {
+          html += `<div class="table-container"><table><thead><tr><th style="width:40px"><input type="checkbox" class="report-select-all"></th><th>Resource ARN</th><th>Missing Tags</th></tr></thead><tbody>`;
+          nonCompliant.forEach(r => {
+            html += `<tr><td><input type="checkbox" class="report-res-check" data-arn="${r.ResourceARN}"></td><td class="arn-cell">${r.ResourceARN}</td><td>${r.MissingTags.map(t => `<span class="status-badge err">${t}</span>`).join('')}</td></tr>`;
+          });
+          html += `</tbody></table></div>`;
+        } else {
+          html += `<div style="padding:10px;font-size:0.85rem;color:var(--success)">✓ All resources compliant in this region</div>`;
+        }
+        html += `</div>`;
       });
-
-      if (data.export_location) {
-        html += `<div class="card" style="margin-top: 1rem; border-style: dashed; text-align: center;">
-          <p style="font-size: 0.85rem; color: var(--muted);">Full report archived to:</p>
-          <code style="color: var(--accent); font-size: 0.8rem;">${data.export_location}</code>
-        </div>`;
-      }
-
-      container.innerHTML = html;
+      if (data.export_location) html += `<div class="stat-card" style="margin-top:1rem;text-align:center"><div class="stat-label">Report Exported To</div><code style="color:var(--accent);font-size:0.8rem">${data.export_location}</code></div>`;
+      document.getElementById('result-content').innerHTML = html;
     }
 
-    $('#btn-sync').onclick = async () => {
-      const btn = $('#btn-sync');
-      const vpcId = $('#sync-vpc-id').value.trim();
-      if (!vpcId) return alert("VPC ID is required.");
-
+    document.getElementById('btn-sync').onclick = async () => {
+      const btn = document.getElementById('btn-sync');
+      const vpcId = document.getElementById('sync-vpc-id').value.trim();
+      if (!vpcId) return toast('VPC ID is required.', 'error');
+      const reg = (state.regions['sync'] || [])[0] || 'us-east-1';
       btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags...';
-      
-      const payload = {
-        action: 'sync_vpc',
-        vpc_id: vpcId,
-        region: $('#sync-region').value
-      };
-
+      btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags…';
       try {
-        const res = await fetch("/api/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        const res = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync_vpc', vpc_id: vpcId, region: reg }) });
         const data = await res.json();
-        renderSyncResults(data);
-      } catch (e) {
-        alert("Sync failed: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Propagate VPC Tags';
-      }
+        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+        document.getElementById('toggle-json').style.display = 'block';
+        renderSyncResults(data, vpcId);
+      } catch (e) { toast('Sync failed: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.innerHTML = 'Propagate VPC Tags'; }
     };
 
-    function renderSyncResults(data) {
-      const container = $('#result-content');
-      const output = $('#output');
-      output.textContent = JSON.stringify(data, null, 2);
-
-      let html = `<div class="section-title">Propagation Results</div>`;
-      
+    function renderSyncResults(data, vpcId) {
+      const updated = data.updated_resources || [];
+      let html = `<div class="section-title" style="margin-bottom:1.5rem">VPC Tag Propagation — <code style="font-size:0.85rem;color:#60a5fa">${vpcId}</code></div>`;
       if (data.error) {
-        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger)">Error: ${data.error}</div></div>`;
+        html += `<div style="padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;color:var(--danger)">Error: ${data.error}</div>`;
       } else {
-        const results = data.results || {};
-        Object.entries(results).forEach(([type, items]) => {
-           html += `<div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-             <div style="font-weight: 700; color: #93c5fd; margin-bottom: 8px;">${type} (${items.length})</div>
-             <div style="font-family: var(--mono); font-size: 0.75rem; color: var(--muted); line-height: 1.5;">
-               ${items.map(i => `• ${i}`).join('<br>')}
-             </div>
-           </div>`;
-        });
-        
-        if (!Object.keys(results).length) {
-          html += `<div class="empty-state"><p>No child resources found for propagation.</p></div>`;
+        html += `<div class="score-ring" style="margin-bottom:1.5rem">
+          <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,rgba(6,182,212,0.2),rgba(59,130,246,0.2));border:2px solid rgba(6,182,212,0.4);display:flex;align-items:center;justify-content:center;flex-direction:column">
+            <span style="font-size:1.5rem;font-weight:700;color:#67e8f9">${updated.length}</span>
+          </div>
+          <div class="score-meta"><h3 style="color:#67e8f9">Resources Updated</h3><p>Tags propagated from <b>${vpcId}</b> to all child network resources.</p></div>
+        </div>`;
+        if (updated.length) {
+          html += `<div class="sync-resource-list">${updated.map(a => `• ${a}`).join('<br>')}</div>`;
+        } else {
+          html += `<div style="color:var(--muted);font-size:0.85rem;padding:1rem">No child resources were found or updated.</div>`;
+        }
+        if (data.errors && data.errors.length) {
+          html += `<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:#fca5a5">${data.errors.join('<br>')}</div></div>`;
         }
       }
-
-      container.innerHTML = html;
+      document.getElementById('result-content').innerHTML = html;
+      toast(data.error ? 'Sync failed.' : `Propagated tags to ${updated.length} resources.`, data.error ? 'error' : 'success');
     }
+
+    // Replace alerts with toasts
+    const _origAlert = window.alert;
+    window.alert = (msg) => {
+      const type = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') ? 'error' : 'info';
+      toast(msg, type);
+    };
+
+    // Update stat bar on results
+    const _origRenderResults = window.renderResults || null;
 
     addTagRow('read-filters');
     addTagRow('write-tags');
+
+    function transferReportToBatch() {
+      const selected = Array.from(document.querySelectorAll('.report-res-check:checked')).map(cb => cb.dataset.arn);
+      if (!selected.length) return toast('Please select at least one resource to fix.', 'warning');
+
+      const textarea = document.getElementById('write-arns');
+      const currentVal = textarea.value.trim();
+      const newVal = (currentVal ? currentVal + '\n' : '') + selected.join('\n');
+
+      // Remove duplicates
+      const uniqueArns = [...new Set(newVal.split('\n'))].filter(s => s.trim());
+      textarea.value = uniqueArns.join('\n');
+
+      // Switch to Write tab
+      document.querySelector('[data-tab="write"]').click();
+      toast(`Transferred ${selected.length} resources to Batch Tagging`, 'success');
+
+      // Auto-focus the tag key field
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#write-tags .tag-key');
+        if (rows.length) rows[0].focus();
+        else {
+          addTagRow('write-tags');
+          setTimeout(() => document.querySelector('#write-tags .tag-key').focus(), 50);
+        }
+      }, 100);
+    }
+
+    // Handle Select All in Report
+    document.addEventListener('change', (e) => {
+      if (e.target.classList.contains('report-select-all')) {
+        const table = e.target.closest('table');
+        const cbs = table.querySelectorAll('.report-res-check');
+        cbs.forEach(cb => cb.checked = e.target.checked);
+      }
+    });
+
     loadMeta();
+
+    // Table Filtering
+    document.getElementById('table-filter').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll('#result-content tbody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.classList.toggle('filtered', !text.includes(q));
+      });
+    });
+
+    // CSV Export
+    document.getElementById('btn-export-csv').onclick = () => {
+      const rows = document.querySelectorAll('#result-content table tr');
+      let csv = [];
+      rows.forEach(row => {
+        const cols = row.querySelectorAll('td, th');
+        let rowData = [];
+        cols.forEach((col, idx) => {
+          if (idx === 0) return; // skip checkbox
+          let text = col.innerText.replace(/\n/g, ' ').replace(/"/g, '""');
+          rowData.push('"' + text + '"');
+        });
+        if (rowData.length) csv.push(rowData.join(','));
+      });
+
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('hidden', '');
+      a.setAttribute('href', url);
+      a.setAttribute('download', `aws-resources-${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast('CSV exported successfully', 'success');
+    };
+
+    // Auto-populate Region Pickers on load if meta fails or before it loads
+    window.addEventListener('DOMContentLoaded', () => {
+      if (!regionPickers['read']) {
+        // Fallback if loadMeta hasn't run
+        console.log("Waiting for metadata...");
+      }
+    });
   </script>
 </body>
+
 </html>

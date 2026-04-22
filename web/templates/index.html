@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Tagging Utils - Governance Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030712;
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.5);
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+    }
+
+    .glass {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 3rem;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .logo-text {
+      font-weight: 800;
+      font-size: 1.5rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #fff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-pill {
+      padding: 6px 14px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 100px;
+      font-size: 0.8rem;
+      color: var(--success);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 2rem;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .nav-card {
+      padding: 1.5rem;
+    }
+
+    .nav-item {
+      padding: 12px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+    }
+
+    .nav-item.active {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .card {
+      padding: 2rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .field {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    select, input, textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .tag-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 40px;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .remove-btn {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .results-area {
+      flex: 1;
+    }
+
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .arn-cell {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      max-width: 400px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge.ok { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+    .status-badge.err { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+
+    .tabs-header {
+      display: flex;
+      gap: 2rem;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 2rem;
+    }
+
+    .tab-btn {
+      padding: 12px 0;
+      color: var(--muted);
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: var(--accent);
+      box-shadow: 0 -2px 10px var(--accent-glow);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    #json-output-container {
+      margin-top: 2rem;
+      display: none;
+    }
+
+    pre {
+      background: #000;
+      padding: 1.5rem;
+      border-radius: 12px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      border: 1px solid var(--card-border);
+      color: #93c5fd;
+    }
+
+    .multi-select {
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .multi-select-item {
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .multi-select-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .multi-select-item input {
+      width: auto;
+    }
+
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--muted);
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.2;
+    }
+
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { order: 2; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        </div>
+        <div class="logo-text">AWS Tagging Utils</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        Cloud Connected
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- SIDEBAR -->
+      <div class="sidebar">
+        <div class="glass nav-card">
+          <div class="nav-item active" data-tab="read">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            Resource Discovery
+          </div>
+          <div class="nav-item" data-tab="report">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Compliance Report
+          </div>
+          <div class="nav-item" data-tab="gov">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            Governance & Auto-Tag
+          </div>
+          <div class="nav-item" data-tab="write">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            Batch Tagging
+          </div>
+          <div class="nav-item" data-tab="sync">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            VPC Tag Propagator
+          </div>
+        </div>
+
+        <div class="glass card" id="config-panel">
+          <!-- Discovery Config -->
+          <div id="cfg-read" class="tab-cfg active">
+            <div class="section-title">Discovery Filters</div>
+            <div class="field">
+              <label>Target Region</label>
+              <select id="read-region" class="region-picker"></select>
+            </div>
+            <div class="field">
+              <label>Resource Type</label>
+              <select id="read-resource"></select>
+            </div>
+            <div class="field">
+              <label>Tag Filters</label>
+              <div id="read-filters"></div>
+              <button class="btn btn-secondary" style="padding: 8px; font-size: 0.8rem;" onclick="addTagRow('read-filters')">+ Add Filter</button>
+            </div>
+            <div class="field" style="margin-top: 2rem;">
+              <button class="btn btn-primary" id="btn-read">Search Infrastructure</button>
+            </div>
+          </div>
+
+          <!-- Report Config -->
+          <div id="cfg-report" class="tab-cfg">
+            <div class="section-title">Compliance Audit</div>
+            <div class="field">
+              <label>Audit Regions</label>
+              <div id="report-regions" class="multi-select"></div>
+            </div>
+            <div class="field">
+              <label>Mandatory Tag Keys</label>
+              <input type="text" id="report-mandatory" placeholder="Owner, Environment, CostCenter">
+            </div>
+            <div class="field">
+              <label>S3 Export Bucket (Optional)</label>
+              <input type="text" id="report-bucket" placeholder="my-compliance-reports">
+            </div>
+            <div class="field" style="margin-top: 2rem;">
+              <button class="btn btn-primary" id="btn-report">Generate Health Report</button>
+            </div>
+          </div>
+
+          <!-- Governance Config -->
+          <div id="cfg-gov" class="tab-cfg">
+            <div class="section-title">Compliance & Auto-Tagging</div>
+            <div class="field">
+              <label>Target Regions</label>
+              <div id="gov-regions" class="multi-select"></div>
+            </div>
+            <div class="field">
+              <label>Resource Types (Optional Filter)</label>
+              <div id="gov-types" class="multi-select" style="height: 150px;"></div>
+            </div>
+            <div class="field">
+              <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
+                This will scan the selected regions for resources missing the <b>Owner</b> tag and attempt to identify their creators via
+                CloudTrail history to apply the tag automatically.
+              </p>
+            </div>
+            <div class="field">
+              <button class="btn btn-primary" id="btn-gov">Run Auto-Tagging Scan</button>
+            </div>
+          </div>
+
+          <!-- Batch Write Config -->
+          <div id="cfg-write" class="tab-cfg">
+            <div class="section-title">Batch Metadata Write</div>
+            <div class="field">
+              <label>Target Regions</label>
+              <div id="write-regions" class="multi-select"></div>
+            </div>
+            <div class="field">
+              <label>Resource Inventory (ARNs)</label>
+              <textarea id="write-arns" rows="6" style="font-family: var(--mono); font-size: 0.75rem;" placeholder="arn:aws:ec2:us-east-1:123456789012:instance/i-0abc..."></textarea>
+            </div>
+            <div class="field">
+              <label>New Metadata (Tags)</label>
+              <div id="write-tags"></div>
+              <button class="btn btn-secondary" style="padding: 8px; font-size: 0.8rem;" onclick="addTagRow('write-tags')">+ Add Tag</button>
+            </div>
+            <div class="field" style="margin-top: 2rem;">
+              <button class="btn btn-primary" id="btn-write">Commit Batch Changes</button>
+            </div>
+          </div>
+
+          <!-- Sync Config -->
+          <div id="cfg-sync" class="tab-cfg">
+            <div class="section-title">VPC Tag Propagator</div>
+            <div class="field">
+              <label>Target Region</label>
+              <select id="sync-region" class="region-picker"></select>
+            </div>
+            <div class="field">
+              <label>Parent VPC ID</label>
+              <input type="text" id="sync-vpc-id" placeholder="vpc-0a1b2c3d...">
+            </div>
+            <div class="field">
+              <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
+                Propagates tags from the parent VPC to all child resources (Subnets, Security Groups, NAT Gateways, etc.).
+              </p>
+            </div>
+            <div class="field">
+              <button class="btn btn-primary" id="btn-sync">Propagate VPC Tags</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN AREA -->
+      <div class="main-content">
+        <div class="glass results-area">
+          <div id="result-content">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              </div>
+              <h3>Infrastructure Ready</h3>
+              <p>Configure filters on the left and run a search to see your AWS resources.</p>
+            </div>
+          </div>
+
+          <div id="json-output-container">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h4 style="font-size: 0.8rem; color: var(--muted); text-transform: uppercase;">API Debug Output</h4>
+              <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.7rem;" id="toggle-json">Hide JSON Debug</button>
+            </div>
+            <pre id="output">{}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+
+    let state = {
+      activeTab: 'read',
+      lastResults: [],
+      regions: { read: 'us-east-1', report: [], gov: [], write: [] },
+      types: { gov: [] }
+    };
+
+    async function loadMeta() {
+      try {
+        const res = await fetch("/api/meta");
+        const data = await res.json();
+        
+        // Regions
+        $$('.region-picker').forEach(el => {
+          el.innerHTML = data.regions.map(r => `<option value="${r}">${r}</option>`).join('');
+        });
+        
+        // Multi-region pickers
+        ['report', 'gov', 'write'].forEach(tab => {
+          const container = $(`#${tab}-regions`);
+          if (container) {
+            container.innerHTML = data.regions.map(r => `
+              <div class="multi-select-item">
+                <input type="checkbox" value="${r}" onchange="updateSelectedRegions('${tab}', this)">
+                <span>${r}</span>
+              </div>
+            `).join('');
+          }
+        });
+
+        // Resource Types
+        $('#read-resource').innerHTML = Object.keys(data.resource_map).map(k => `<option value="${k}">${k}</option>`).join('');
+        
+        // Gov Types
+        $('#gov-types').innerHTML = Object.keys(data.resource_map).map(k => `
+          <div class="multi-select-item">
+            <input type="checkbox" value="${k}" onchange="updateSelectedTypes('gov', this)">
+            <span><b>${k}</b> <br><small style="color:var(--muted); font-size:0.7rem;">${data.resource_map[k]}</small></span>
+          </div>
+        `).join('');
+
+      } catch (e) { console.error("Meta load error", e); }
+    }
+
+    function updateSelectedRegions(tab, el) {
+      if (!Array.isArray(state.regions[tab])) state.regions[tab] = [];
+      if (el.checked) state.regions[tab].push(el.value);
+      else state.regions[tab] = state.regions[tab].filter(v => v !== el.value);
+    }
+
+    function updateSelectedTypes(tab, el) {
+      if (!Array.isArray(state.types[tab])) state.types[tab] = [];
+      if (el.checked) state.types[tab].push(el.value);
+      else state.types[tab] = state.types[tab].filter(v => v !== el.value);
+    }
+
+    // Sidebar Tab Switching
+    $$('.nav-item').forEach(item => {
+      item.onclick = () => {
+        const tab = item.dataset.tab;
+        state.activeTab = tab;
+        
+        $$('.nav-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+
+        $$('.tab-cfg').forEach(c => c.classList.remove('active'));
+        $(`#cfg-${tab}`).classList.add('active');
+        
+        // Show result content if hidden
+        $('#result-content').style.display = 'block';
+        $('#json-output-container').style.display = 'block';
+      };
+    });
+
+    function addTagRow(containerId) {
+      const container = $(`#${containerId}`);
+      const row = document.createElement('div');
+      row.className = 'tag-grid';
+      row.innerHTML = `
+        <input type="text" class="tag-key" placeholder="Key">
+        <input type="text" class="tag-val" placeholder="Value">
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+      `;
+      container.appendChild(row);
+    }
+
+    $('#btn-read').onclick = async () => {
+      const btn = $('#btn-read');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner"></div> Querying AWS...';
+      
+      const filters = {};
+      $$('#read-filters .tag-row').forEach(row => {
+        const k = row.querySelector('.tag-key').value.trim();
+        const v = row.querySelector('.tag-val').value.trim();
+        if (k && v) filters[k] = v;
+      });
+
+      const payload = {
+        region: $('#read-region').value,
+        resource: $('#read-resource').value,
+        filters: filters
+      };
+
+      try {
+        const res = await fetch("/api/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderReadResults(data);
+      } catch (e) {
+        alert("Discovery failed: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Search Infrastructure';
+      }
+    };
+
+    function renderReadResults(data) {
+      const container = $('#result-content');
+      const output = $('#output');
+      output.textContent = JSON.stringify(data, null, 2);
+
+      if (data.error) {
+        container.innerHTML = `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger)">Error: ${data.error}</div></div>`;
+        return;
+      }
+
+      state.lastResults = data.resources || [];
+      let html = `
+        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <div class="section-title">Discovered Resources (${state.lastResults.length})</div>
+          <button class="btn btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.8rem;" id="btn-transfer">Transfer Selected to Write</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px;"><input type="checkbox" id="select-all-results"></th>
+                <th>Resource Name</th>
+                <th>ARN</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${state.lastResults.map((r, i) => `
+                <tr>
+                  <td><input type="checkbox" class="result-check" data-idx="${i}"></td>
+                  <td style="font-weight:600">${r.Name}</td>
+                  <td class="arn-cell">${r.ResourceARN}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      if (!state.lastResults.length) {
+        html = `<div class="empty-state">No resources matched your filters in ${data.region || 'the region'}.</div>`;
+      }
+
+      container.innerHTML = html;
+
+      $('#select-all-results').onclick = (e) => {
+        $$('.result-check').forEach(c => c.checked = e.target.checked);
+      };
+    }
+
+    $('#btn-transfer').onclick = () => {
+      const selected = Array.from($$('.result-check:checked'))
+        .map(c => state.lastResults[c.dataset.idx].ResourceARN);
+
+      if (!selected.length) return alert("Select at least one resource from the table.");
+
+      $('#write-arns').value = selected.join('\n');
+
+      Array.from($$('.tab-btn')).find(b => b.dataset.tab === 'write').click();
+      $('#write-arns').focus();
+    };
+
+    $('#btn-write').onclick = async () => {
+      const btn = $('#btn-write');
+      const arns = $('#write-arns').value.split('\n').filter(s => s.trim());
+      if (!arns.length) return alert("Resource Inventory is empty.");
+
+      const tags = {};
+      $$('#write-tags .tag-row').forEach(row => {
+        const k = row.querySelector('.tag-key').value.trim();
+        const v = row.querySelector('.tag-val').value.trim();
+        if (k && v) tags[k] = v;
+      });
+
+      if (!Object.keys(tags).length) return alert("Please define at least one tag metadata key-pair.");
+
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner"></div> Executing Write Operations...';
+
+      const payload = {
+        arns: arns,
+        tags: tags,
+        regions: state.regions['write']
+      };
+
+      try {
+        const res = await fetch("/api/write", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderWriteResults(data);
+      } catch (e) {
+        alert("Batch tagging failed: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Commit Batch Changes';
+      }
+    };
+
+    function renderWriteResults(data) {
+      const container = $('#result-content');
+      const output = $('#output');
+      output.textContent = JSON.stringify(data, null, 2);
+
+      const failed = data.failed_resources || {};
+      const successArns = (data.arns || []).filter(a => !failed[a]);
+      const failedArns = Object.keys(failed);
+
+      let html = `<div class="section-title">Batch Execution Summary</div>`;
+
+      if (successArns.length) {
+        html += `<div class="card" style="border-color: var(--success); margin-bottom:1.5rem;"><div style="color:var(--success); font-weight:700">✓ Successful Operations (${successArns.length})</div><div style="font-size:0.75rem; margin-top:10px; color:var(--muted); line-height:1.4">${successArns.join('<br>')}</div></div>`;
+      }
+
+      if (failedArns.length) {
+        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger); font-weight:700">⚠ Partial Failures (${failedArns.length})</div><table style="margin-top:12px; font-size:0.8rem;">${failedArns.map(a => `<tr><td class="arn-cell">${a}</td><td style="color:var(--danger)">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td></tr>`).join('')}</table></div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    $('#toggle-json').onclick = () => {
+      const container = $('#json-output-container');
+      const isVisible = container.style.display === 'block';
+      container.style.display = isVisible ? 'none' : 'block';
+      $('#toggle-json').textContent = isVisible ? 'Show JSON Debug' : 'Hide JSON Debug';
+    };
+
+    $('#btn-gov').onclick = async () => {
+      const btn = $('#btn-gov');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner"></div> Identifying Owners...';
+      const payload = {
+        action: 'scan',
+        regions: state.regions['gov'],
+        types: state.types.gov
+      };
+
+      try {
+        const res = await fetch("/api/gov", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderGovResults(data);
+      } catch (e) {
+        alert("Governance scan failed: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Run Auto-Tagging Scan';
+      }
+    };
+
+    function renderGovResults(data) {
+      const container = $('#result-content');
+      const output = $('#output');
+      output.textContent = JSON.stringify(data, null, 2);
+
+      const regionData = data.regions || {};
+      let html = `<div class="section-title">Reconciliation Summary: ${data.total_tagged || 0} Resources Tagged</div>`;
+
+      Object.entries(regionData).forEach(([reg, res]) => {
+        const tagged = res.tagged || [];
+        const failed = res.failed || {};
+        const unidentified = res.unidentified || [];
+        const failedArns = Object.keys(failed);
+
+        html += `<div style="margin-bottom: 24px;">
+          <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 0.95rem;">Region: ${reg}</h4>`;
+
+        if (tagged.length) {
+          html += `<div class="card" style="border-color: rgba(16, 185, 129, 0.4); margin-bottom:1rem; padding: 1rem; background: rgba(16, 185, 129, 0.05);">
+            <div style="color:var(--success); font-weight:700; margin-bottom: 8px;">✓ Automatically Tagged (${tagged.length})</div>
+            <div style="font-family: var(--mono); font-size:0.75rem; color: #cbd5e1; line-height:1.6; word-break: break-all;">
+              ${tagged.join('<br>')}
+            </div>
+          </div>`;
+        }
+
+        if (unidentified.length) {
+          html += `<div class="card" style="border-color: rgba(245, 158, 11, 0.4); margin-bottom:1rem; padding: 1rem; background: rgba(245, 158, 11, 0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="color:var(--warning); font-weight:700;">⚠ Identified But No Owner Found (${unidentified.length})</div>
+              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.7rem; width: auto;" onclick="transferGovToBatch('${reg}')">Transfer to Batch Fix</button>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--muted); margin-bottom: 10px;">
+              These resources are missing the <b>Owner</b> tag, but no creation events were found in CloudTrail history (last 90 days).
+            </div>
+            <div style="font-family: var(--mono); font-size:0.75rem; color: #cbd5e1; line-height:1.6; word-break: break-all;">
+              ${unidentified.join('<br>')}
+            </div>
+          </div>`;
+        }
+
+        if (failedArns.length) {
+          html += `<div class="card" style="border-color: rgba(239, 68, 68, 0.4); padding: 1rem; background: rgba(239, 68, 68, 0.05);">
+            <div style="color:var(--danger); font-weight:700; margin-bottom: 8px;">⚠ Tagging Failed (${failedArns.length})</div>
+            <table style="width: 100%; border: none; background: transparent;">
+              ${failedArns.map(a => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <td style="padding: 8px 0; font-family: var(--mono); font-size: 0.75rem; color: #cbd5e1; word-break: break-all; border: none;">${a}</td>
+                  <td style="padding: 8px 0 8px 12px; font-size: 0.8rem; color: var(--danger); border: none;">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>`;
+        }
+
+        if (!tagged.length && !failedArns.length && !unidentified.length) {
+          html += `<div style="font-size: 0.85rem; color: var(--muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">No resources missing tags were found.</div>`;
+        }
+        html += `</div>`;
+      });
+
+      container.innerHTML = html;
+      state.lastGovResults = data;
+    }
+
+    window.transferGovToBatch = (region) => {
+      const res = state.lastGovResults.regions[region];
+      const arns = res.unidentified || [];
+      if (!arns.length) return;
+
+      $('#write-arns').value = arns.join('\n');
+      
+      // Select the "Batch Tagging" tab
+      $$('.nav-item').forEach(i => i.classList.remove('active'));
+      const batchTab = Array.from($$('.nav-item')).find(b => b.dataset.tab === 'write');
+      batchTab.classList.add('active');
+      $$('.tab-cfg').forEach(c => c.classList.remove('active'));
+      $('#cfg-write').classList.add('active');
+
+      // Pre-fill Owner tag row if not exists
+      const rows = $$('#write-tags .tag-grid');
+      let ownerRow = Array.from(rows).find(r => r.querySelector('.tag-key').value === 'Owner');
+      if (!ownerRow) {
+        addTagRow('write-tags');
+        const newRows = $$('#write-tags .tag-grid');
+        ownerRow = newRows[newRows.length - 1];
+        ownerRow.querySelector('.tag-key').value = 'Owner';
+      }
+      ownerRow.querySelector('.tag-val').focus();
+    };
+
+    $('#btn-report').onclick = async () => {
+      const btn = $('#btn-report');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner"></div> Auditing Compliance...';
+      
+      const payload = {
+        regions: state.regions['report'],
+        mandatory_tags: $('#report-mandatory').value.split(',').map(s => s.trim()).filter(s => s),
+        export_bucket: $('#report-bucket').value.trim() || null
+      };
+
+      try {
+        const res = await fetch("/api/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderReportResults(data);
+      } catch (e) {
+        alert("Report generation failed: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Generate Health Report';
+      }
+    };
+
+    function renderReportResults(data) {
+      const container = $('#result-content');
+      const output = $('#output');
+      output.textContent = JSON.stringify(data, null, 2);
+
+      const summary = data.summary || {};
+      const score = summary.compliance_score !== undefined ? summary.compliance_score : 0;
+      const color = score > 80 ? 'var(--success)' : score > 50 ? 'var(--warning)' : 'var(--danger)';
+
+      let html = `<div class="section-title">Tagging Health Scorecard</div>
+        <div class="card" style="text-align: center; margin-bottom: 2rem; border-color: ${color}; background: rgba(0,0,0,0.2);">
+          <div style="font-size: 3rem; font-weight: 800; color: ${color}">${score}%</div>
+          <div style="color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem;">Overall Compliance</div>
+        </div>
+      `;
+
+      const regions = data.regions || {};
+      Object.entries(regions).forEach(([reg, res]) => {
+        const regScore = res.compliance_score !== undefined ? res.compliance_score : 0;
+        html += `<div style="margin-bottom: 20px;">
+          <h4 style="color: #93c5fd; margin-bottom: 8px;">${reg} (${regScore}%)</h4>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Resource</th><th>Missing Tags</th></tr></thead>
+              <tbody>
+                ${(res.resources || []).filter(r => !r.IsCompliant).map(r => `
+                  <tr>
+                    <td class="arn-cell">${r.ResourceARN}</td>
+                    <td>${r.MissingTags.map(t => `<span class="status-badge err">${t}</span>`).join('')}</td>
+                  </tr>
+                `).join('')}
+                ${!res.resources?.some(r => !r.IsCompliant) ? '<tr><td colspan="2" style="text-align:center; color:var(--success)">100% Compliant</td></tr>' : ''}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+      });
+
+      if (data.export_location) {
+        html += `<div class="card" style="margin-top: 1rem; border-style: dashed; text-align: center;">
+          <p style="font-size: 0.85rem; color: var(--muted);">Full report archived to:</p>
+          <code style="color: var(--accent); font-size: 0.8rem;">${data.export_location}</code>
+        </div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    $('#btn-sync').onclick = async () => {
+      const btn = $('#btn-sync');
+      const vpcId = $('#sync-vpc-id').value.trim();
+      if (!vpcId) return alert("VPC ID is required.");
+
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags...';
+      
+      const payload = {
+        action: 'sync_vpc',
+        vpc_id: vpcId,
+        region: $('#sync-region').value
+      };
+
+      try {
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderSyncResults(data);
+      } catch (e) {
+        alert("Sync failed: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Propagate VPC Tags';
+      }
+    };
+
+    function renderSyncResults(data) {
+      const container = $('#result-content');
+      const output = $('#output');
+      output.textContent = JSON.stringify(data, null, 2);
+
+      let html = `<div class="section-title">Propagation Results</div>`;
+      
+      if (data.error) {
+        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger)">Error: ${data.error}</div></div>`;
+      } else {
+        const results = data.results || {};
+        Object.entries(results).forEach(([type, items]) => {
+           html += `<div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+             <div style="font-weight: 700; color: #93c5fd; margin-bottom: 8px;">${type} (${items.length})</div>
+             <div style="font-family: var(--mono); font-size: 0.75rem; color: var(--muted); line-height: 1.5;">
+               ${items.map(i => `• ${i}`).join('<br>')}
+             </div>
+           </div>`;
+        });
+        
+        if (!Object.keys(results).length) {
+          html += `<div class="empty-state"><p>No child resources found for propagation.</p></div>`;
+        }
+      }
+
+      container.innerHTML = html;
+    }
+
+    addTagRow('read-filters');
+    addTagRow('write-tags');
+    loadMeta();
+  </script>
+</body>
+</html>

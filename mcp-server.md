@@ -117,7 +117,7 @@ Use **uvx** so the MCP client fetches and runs the server from the repository. A
 ```json
 {
   "mcpServers": {
-    "AWS Tagging Utils": {
+    "aws_tagging_utils": {
       "command": "uvx",
       "args": [
         "--from",
@@ -142,7 +142,7 @@ Clone the repo, then use **uv** with the project path. This is the usual approac
 ```json
 {
   "mcpServers": {
-    "AWS Tagging Utils": {
+    "aws_tagging_utils": {
       "command": "uv",
       "args": [
         "run",
@@ -162,7 +162,7 @@ Clone the repo, then use **uv** with the project path. This is the usual approac
 ```json
 {
   "mcpServers": {
-    "AWS Tagging Utils": {
+    "aws_tagging_utils": {
       "command": "/home/kioskog/.local/bin/uv",
       "args": [
         "run",

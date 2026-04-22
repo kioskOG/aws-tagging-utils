@@ -163,14 +163,18 @@ Clone the repo, then use **uv** with the project path. This is the usual approac
 {
   "mcpServers": {
     "aws_tagging_utils": {
-      "command": "/home/kioskog/.local/bin/uv",
+      "command": "python3",
       "args": [
-        "run",
-        "mcp_server",
+        "<YOUR_WORKSPACE_PATH>/aws-tagging-utils/mcp_server.py",
         "--transport",
         "stdio"
-      ]
+      ],
+      "env": {
+        "AWS_PROFILE": "Dev",
+        "AWS_REGION": "us-east-2"
+      }
     }
+
   }
 }
 ```

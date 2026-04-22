@@ -123,13 +123,13 @@ Use **uvx** so the MCP client fetches and runs the server from the repository. A
         "--from",
         "git+https://github.com/kioskOG/aws-tagging-utils",
         "mcp_server",
-        "env": {
+        "--transport",
+        "stdio"
+      ],
+      "env": {
         "AWS_PROFILE": "dev-account",
         "AWS_REGION": "us-east-2"
       }
-        "--transport",
-        "stdio"
-      ]
     }
   }
 }

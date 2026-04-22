@@ -1,0 +1,20 @@
+[project]
+name = "aws-tagging-utils"
+version = "0.1.0"
+description = "AWS Tagging Utilities MCP Server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "boto3",
+    "botocore",
+    "flask>=3.0.0",
+    "mcp",
+    "fastmcp",
+]
+
+[project.scripts]
+mcp_server = "mcp_server:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

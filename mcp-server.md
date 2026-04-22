@@ -106,7 +106,7 @@ Example: `"command": "/home/youruser/.local/bin/uv"` or `"command": "/home/youru
 
 ## MCP configuration
 
-Repository: **https://github.com/NomuPay/mcp-platform**
+Repository: **https://github.com/kioskOG/aws-tagging-utils**
 
 You can run this MCP server in two ways. Both **uv** and **uvx** can be used; **uv** is commonly used on Linux for local runs with a project path, while **uvx** is convenient for running directly from GitHub without cloning.
 

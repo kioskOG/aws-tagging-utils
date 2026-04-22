@@ -188,6 +188,10 @@ Clone the repo, then use **uv** with the project path. This is the usual approac
 - `sync_tags`: Propagation of tags (e.g., VPC -> Subnets).
 
 
+```text
+Generate a report of tagging status for a dynamodb resource region us-east-2 mandatory_tags Owner
+```
+
 ## Troubleshooting
 
 ### 1. `ModuleNotFoundError: No module named 'mcp_server'`

@@ -59,7 +59,7 @@ logger.setLevel(logging.INFO)
 
 DEFAULT_REGION = os.environ.get("AWS_REGION", "us-east-2")
 # Mandatory tags to check for (comma-separated string)
-MANDATORY_TAGS = [t.strip() for t in os.environ.get("MANDATORY_TAGS", "Owner,Environment,CostCenter").split(",") if t.strip()]
+MANDATORY_TAGS = [t.strip() for t in os.environ.get("MANDATORY_TAGS", "Owner").split(",") if t.strip()]
 
 def get_client(region: str):
     return boto3.client("resourcegroupstaggingapi", region_name=region)
@@ -81,10 +81,11 @@ def get_all_regions():
     except Exception:
         return [DEFAULT_REGION]
 
-def generate_report(target_regions: List[str], mandatory_tags: List[str]) -> Dict[str, Any]:
+def generate_report(target_regions: List[str], mandatory_tags: List[str], resource_types: List[str] = None) -> Dict[str, Any]:
     report = {
         "timestamp": datetime.utcnow().isoformat(),
         "mandatory_tags": mandatory_tags,
+        "resource_filter": resource_types,
         "summary": {
             "total_resources": 0,
             "compliant": 0,
@@ -94,7 +95,7 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str]) -> Dic
         "regions": {}
     }
 
-    all_types = list(RESOURCE_TYPE_MAP.values())
+    scan_types = resource_types if resource_types else list(RESOURCE_TYPE_MAP.values())
     
     for region in target_regions:
         logger.info("Auditing region: %s", region)
@@ -108,7 +109,8 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str]) -> Dic
         try:
             client = get_client(region)
             paginator = client.get_paginator("get_resources")
-            page_iterator = paginator.paginate(ResourceTypeFilters=all_types)
+            page_iterator = paginator.paginate(ResourceTypeFilters=scan_types)
+
             
             for page in page_iterator:
                 for item in page.get("ResourceTagMappingList", []):
@@ -166,8 +168,24 @@ def lambda_handler(event, context):
         mandatory_tags = MANDATORY_TAGS
     elif isinstance(mandatory_tags, str):
         mandatory_tags = [t.strip() for t in mandatory_tags.split(",") if t.strip()]
-        
-    report = generate_report(target_regions, mandatory_tags)
+
+    resource_types = event.get("resource_types") or event.get("resources")
+
+    if not resource_types and event.get("resource"):
+        resource_types = [event.get("resource")]
+    
+    # Map friendly aliases to AWS types if needed
+    if resource_types:
+        final_types = []
+        for t in resource_types:
+            if t in RESOURCE_TYPE_MAP:
+                final_types.append(RESOURCE_TYPE_MAP[t])
+            else:
+                final_types.append(t)
+        resource_types = final_types
+
+    report = generate_report(target_regions, mandatory_tags, resource_types)
+
     
     # Optional S3 Export
     bucket = event.get("export_bucket") or os.environ.get("REPORT_BUCKET")
@@ -193,6 +211,6 @@ if __name__ == "__main__":
     # Local test
     test_event = {
         "regions": [DEFAULT_REGION],
-        "mandatory_tags": ["Owner", "Environment"]
+        "mandatory_tags": ["Owner"]
     }
     print(json.dumps(lambda_handler(test_event, None), indent=2))

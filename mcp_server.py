@@ -101,18 +101,31 @@ def apply_governance(
 
 @mcp.tool()
 def get_tag_report(
-    resource: str,
-    region: str = "us-east-2"
+    resource: Optional[str] = None,
+    resources: Optional[List[str]] = None,
+    regions: Optional[List[str]] = None,
+    region: str = "us-east-2",
+    mandatory_tags: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
-    Generate a report of tagging status for a specific resource type.
+    Generate a report of tagging status.
+    
+    Args:
+        resource: Single resource type alias (e.g. 'DynamoDB').
+        resources: List of resource type aliases.
+        regions: List of regions to scan.
+        region: Default region if regions not provided.
+        mandatory_tags: Custom list of mandatory tag keys.
     """
     payload = {
         "resource": resource,
-        "region": region
+        "resources": resources,
+        "regions": regions or [region],
+        "mandatory_tags": mandatory_tags
     }
     result = report_handler(payload, None)
     return result
+
 
 @mcp.tool()
 def sync_tags(

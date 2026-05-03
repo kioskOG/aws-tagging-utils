@@ -1,21 +1,16 @@
-import logging
-import os
 from typing import Any, Dict, List
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from src.clients import get_tagging_client
+from src.config import DEFAULT_REGION, TAG_API_BATCH_SIZE as TAG_RESOURCE_ARN_BATCH_SIZE
+from src.logging_config import get_logger
 
-DEFAULT_REGION = os.environ.get("AWS_REGION", "ap-southeast-1")
-
-# Resource Groups Tagging API: max ARNs per tag_resources call
-TAG_RESOURCE_ARN_BATCH_SIZE = 20
+logger = get_logger(__name__)
 
 
 def get_client(region: str):
-    return boto3.client("resourcegroupstaggingapi", region_name=region)
+    return get_tagging_client(region)
 
 
 def build_response(status_code: int, body: Any) -> Dict[str, Any]:

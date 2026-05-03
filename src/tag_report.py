@@ -1,10 +1,7 @@
-import logging
-import os
 import json
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 # Try to import from tag_read to reuse RESOURCE_TYPE_MAP
@@ -54,18 +51,17 @@ except ImportError:
             "SageMaker": "sagemaker:notebook-instance",
         }
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from src.clients import get_ec2_client, get_s3_client, get_tagging_client
+from src.config import DEFAULT_REGION, MANDATORY_TAGS, REPORT_BUCKET
+from src.logging_config import get_logger
 
-DEFAULT_REGION = os.environ.get("AWS_REGION", "us-east-2")
-# Mandatory tags to check for (comma-separated string)
-MANDATORY_TAGS = [t.strip() for t in os.environ.get("MANDATORY_TAGS", "Owner").split(",") if t.strip()]
+logger = get_logger(__name__)
 
 def get_client(region: str):
-    return boto3.client("resourcegroupstaggingapi", region_name=region)
+    return get_tagging_client(region)
 
-def get_s3_client():
-    return boto3.client("s3")
+def _get_s3_client():
+    return get_s3_client()
 
 def build_response(status_code: int, body: Any) -> Dict[str, Any]:
     return {
@@ -75,7 +71,7 @@ def build_response(status_code: int, body: Any) -> Dict[str, Any]:
 
 def get_all_regions():
     try:
-        ec2 = boto3.client("ec2", region_name=DEFAULT_REGION)
+        ec2 = get_ec2_client(DEFAULT_REGION)
         regs = ec2.describe_regions()
         return [r["RegionName"] for r in regs["Regions"]]
     except Exception:
@@ -83,7 +79,7 @@ def get_all_regions():
 
 def generate_report(target_regions: List[str], mandatory_tags: List[str], resource_types: List[str] = None) -> Dict[str, Any]:
     report = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "mandatory_tags": mandatory_tags,
         "resource_filter": resource_types,
         "summary": {
@@ -188,11 +184,11 @@ def lambda_handler(event, context):
 
     
     # Optional S3 Export
-    bucket = event.get("export_bucket") or os.environ.get("REPORT_BUCKET")
+    bucket = event.get("export_bucket") or REPORT_BUCKET
     if bucket:
         try:
-            s3 = get_s3_client()
-            key = f"tagging-reports/report-{datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')}.json"
+            s3 = _get_s3_client()
+            key = f"tagging-reports/report-{datetime.now(timezone.utc).strftime('%Y-%m-%d-%H-%M-%S')}.json"
             s3.put_object(
                 Bucket=bucket,
                 Key=key,

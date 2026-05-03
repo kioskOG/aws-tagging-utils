@@ -1,14 +1,12 @@
-import logging
-import os
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from src.clients import get_tagging_client
+from src.config import DEFAULT_REGION
+from src.logging_config import get_logger
 
-DEFAULT_REGION = os.environ.get("AWS_REGION", "us-east-2")
+logger = get_logger(__name__)
 
 RESOURCE_TYPE_MAP = {
     "Elasticache": "elasticache:cluster",
@@ -66,7 +64,7 @@ RESOURCE_TYPE_MAP = {
 
 
 def get_client(region: str):
-    return boto3.client("resourcegroupstaggingapi", region_name=region)
+    return get_tagging_client(region)
 
 
 def build_response(status_code: int, body: Any) -> Dict[str, Any]:

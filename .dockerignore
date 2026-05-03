@@ -1,0 +1,52 @@
+# Docker
+*.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing / Coverage
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev tooling
+.mypy_cache/
+.ruff_cache/
+
+# Git
+.git/
+.github/
+
+# Docs (not needed in container)
+*.md
+!README.md
+LICENSE
+
+# Local dev files
+scratch/
+web/
+.pre-commit-config.yaml
+Makefile
+pytest.ini

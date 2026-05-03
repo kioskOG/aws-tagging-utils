@@ -13,9 +13,9 @@
       --border: rgba(255, 255, 255, 0.08);
       --text: #f8fafc;
       --muted: #94a3b8;
-      --accent: #3b82f6;
-      --accent-dim: #2563eb;
-      --accent-glow: rgba(59, 130, 246, 0.4);
+      --accent: #8b5cf6;
+      --accent-dim: #7c3aed;
+      --accent-glow: rgba(139, 92, 246, 0.4);
       --danger: #ef4444;
       --success: #10b981;
       --warning: #f59e0b;
@@ -51,8 +51,8 @@
       min-height: 100vh;
       background-color: var(--bg);
       background-image:
-        radial-gradient(ellipse at top left, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
-        radial-gradient(ellipse at bottom right, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+        radial-gradient(ellipse at top left, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+        radial-gradient(ellipse at bottom right, rgba(245, 158, 11, 0.1) 0%, transparent 40%);
       color: var(--text);
       font-family: var(--font);
       font-size: 15px;
@@ -76,7 +76,7 @@
       font-size: 2rem;
       font-weight: 700;
       margin: 0;
-      background: linear-gradient(135deg, #60a5fa, #a78bfa, #34d399);
+      background: linear-gradient(135deg, #f59e0b, #ef4444, #d946ef, #8b5cf6, #34d399);
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -154,7 +154,7 @@
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.15em;
-      color: #93c5fd;
+      color: #c4b5fd;
       font-weight: 700;
       margin-bottom: 1.5rem;
       display: flex;
@@ -194,7 +194,7 @@
     textarea:focus {
       outline: none;
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
       background: rgba(0, 0, 0, 0.4);
     }
 
@@ -286,7 +286,7 @@
 
     .ms-header.focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
     }
 
     .ms-tags {
@@ -298,9 +298,9 @@
     }
 
     .ms-tag {
-      background: rgba(59, 130, 246, 0.2);
-      color: #93c5fd;
-      border: 1px solid rgba(59, 130, 246, 0.3);
+      background: rgba(139, 92, 246, 0.2);
+      color: #c4b5fd;
+      border: 1px solid rgba(139, 92, 246, 0.3);
       padding: 3px 8px;
       border-radius: 6px;
       font-size: 0.75rem;
@@ -440,14 +440,14 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      background: linear-gradient(135deg, #8b5cf6, #d946ef);
       color: white;
-      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
     }
 
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
       filter: brightness(1.1);
     }
 
@@ -574,7 +574,7 @@
 
     .name-cell {
       font-weight: 600;
-      color: #93c5fd;
+      color: #c4b5fd;
     }
 
     .status-badge {
@@ -601,9 +601,9 @@
     }
 
     .status-badge.info {
-      background: rgba(59, 130, 246, 0.1);
-      color: #93c5fd;
-      border-color: rgba(59, 130, 246, 0.2);
+      background: rgba(139, 92, 246, 0.1);
+      color: #c4b5fd;
+      border-color: rgba(139, 92, 246, 0.2);
     }
 
     /* Result Actions */
@@ -625,7 +625,7 @@
       height: 48px;
       margin-bottom: 1rem;
       opacity: 0.2;
-      color: #38bdf8;
+      color: #c084fc;
     }
 
     #json-output-container {
@@ -719,9 +719,9 @@
     }
 
     .toast-info {
-      background: rgba(59, 130, 246, 0.15);
-      border-color: rgba(59, 130, 246, 0.3);
-      color: #93c5fd;
+      background: rgba(139, 92, 246, 0.15);
+      border-color: rgba(139, 92, 246, 0.3);
+      color: #c4b5fd;
     }
 
     /* Stats bar */
@@ -794,7 +794,7 @@
 
 
     .stat-value.blue {
-      color: #60a5fa;
+      color: #a78bfa;
     }
 
     .stat-value.green {
@@ -893,16 +893,16 @@
     .region-section-title h4 {
       margin: 0;
       font-size: 0.9rem;
-      color: #93c5fd;
+      color: #c4b5fd;
     }
 
     .region-badge {
       font-size: 0.75rem;
       padding: 2px 8px;
       border-radius: 100px;
-      background: rgba(59, 130, 246, 0.15);
-      color: #93c5fd;
-      border: 1px solid rgba(59, 130, 246, 0.2);
+      background: rgba(139, 92, 246, 0.15);
+      color: #c4b5fd;
+      border: 1px solid rgba(139, 92, 246, 0.2);
     }
 
     /* Sync result */
@@ -941,14 +941,14 @@
     }
 
     ::-webkit-scrollbar-thumb {
-      background: rgba(59, 130, 246, 0.2);
+      background: rgba(139, 92, 246, 0.2);
       border-radius: 10px;
       border: 2px solid transparent;
       background-clip: content-box;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: rgba(59, 130, 246, 0.4);
+      background: rgba(139, 92, 246, 0.4);
       border-radius: 10px;
       border: 2px solid transparent;
       background-clip: content-box;
@@ -960,7 +960,7 @@
     }
 
     .card:hover {
-      border-color: rgba(59, 130, 246, 0.3);
+      border-color: rgba(139, 92, 246, 0.3);
       box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
     }
 
@@ -975,12 +975,12 @@
     }
 
     .name-cell {
-      color: #60a5fa;
+      color: #a78bfa;
       transition: color 0.2s;
     }
 
     tr:hover .name-cell {
-      color: #93c5fd;
+      color: #c4b5fd;
     }
 
     /* Help Tooltip */
@@ -1299,7 +1299,7 @@
             Internet Gateways, and NAT Gateways.
           </div>
           <button class="btn btn-primary" id="btn-sync"
-            style="width: 100%; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#06b6d4,#3b82f6);">
+            style="width: 100%; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#8b5cf6,#d946ef);">
             Propagate VPC Tags
           </button>
         </div>
@@ -1316,7 +1316,7 @@
               <button class="btn btn-outline" id="btn-export-csv"
                 style="padding: 0 12px; height: 36px; font-size: 0.8rem;">Export CSV</button>
               <button class="btn btn-outline" id="btn-transfer"
-                style="background: rgba(94, 165, 250, 0.1); border-color: rgba(94, 165, 250, 0.3); color: #60a5fa;">
+                style="background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); color: #a78bfa;">
                 Transfer to Batch Writer →
               </button>
             </div>
@@ -1365,7 +1365,7 @@
       resourceMap: {},
       lastResults: [],
       selectedTab: 'read',
-      regions: { read: [], write: [], gov: [] },
+      regions: { read: [], write: [], gov: [], report: [], sync: [] },
       types: { gov: [] }
     };
 
@@ -1373,7 +1373,8 @@
       constructor(containerId, tabKey, defaultAll = false) {
         this.container = document.getElementById(containerId);
         this.tabKey = tabKey;
-        this.selected = defaultAll ? AWS_REGIONS.map(r => r.id) : ['ap-southeast-1'];
+        this.selected = defaultAll ? AWS_REGIONS.map(r => r.id) : ['us-east-2'];
+        this.searchTerm = '';
         this.render();
       }
 
@@ -1393,13 +1394,20 @@
                     <div class="ms-arrow">▼</div>
                 </div>
                 <div class="ms-dropdown">
-                    <div class="ms-controls">
-                        <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
-                        <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
+                    <div class="ms-controls" style="flex-direction: column; gap: 10px;">
+                        <input type="text" placeholder="Search regions..." class="region-search-input"
+                               style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 6px 10px; font-size: 0.85rem;"
+                               onclick="event.stopPropagation()"
+                               oninput="regionPickers['${this.tabKey}'].filterList(this.value)">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
+                            <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
+                        </div>
                     </div>
                     <div class="ms-list">
                         ${AWS_REGIONS.map(r => `
-                            <div class="ms-opt" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].toggle('${r.id}')">
+                            <div class="ms-opt" data-region-id="${r.id}" data-region-name="${r.name}"
+                                 onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].toggle('${r.id}')">
                                 <input type="checkbox" ${this.selected.includes(r.id) ? 'checked' : ''} style="pointer-events:none">
                                 <div class="ms-opt-text">
                                     <span class="ms-opt-name">${r.name}</span>
@@ -1415,6 +1423,35 @@
         state.regions[this.tabKey] = this.selected.length === AWS_REGIONS.length ? ['all'] : this.selected;
       }
 
+      filterList(query) {
+        this.searchTerm = query;
+        const q = query.toLowerCase();
+        const items = this.container.querySelectorAll('.ms-opt');
+        let visibleCount = 0;
+        items.forEach(item => {
+          const regionId = item.dataset.regionId.toLowerCase();
+          const regionName = item.dataset.regionName.toLowerCase();
+          const matches = !q || regionId.includes(q) || regionName.includes(q);
+          item.style.display = matches ? '' : 'none';
+          if (matches) visibleCount++;
+        });
+
+        // Show/hide "no results" message
+        let noResults = this.container.querySelector('.ms-no-results');
+        if (visibleCount === 0) {
+          if (!noResults) {
+            noResults = document.createElement('div');
+            noResults.className = 'ms-no-results';
+            noResults.style.cssText = 'padding: 20px; text-align: center; color: var(--muted); font-size: 0.85rem;';
+            noResults.textContent = 'No regions found';
+            this.container.querySelector('.ms-list').appendChild(noResults);
+          }
+          noResults.style.display = '';
+        } else if (noResults) {
+          noResults.style.display = 'none';
+        }
+      }
+
       toggle(id) {
         if (this.selected.includes(id)) {
           this.selected = this.selected.filter(x => x !== id);
@@ -1422,12 +1459,27 @@
           this.selected.push(id);
         }
         this.render();
+        // Re-apply search filter and restore search text after re-render
+        if (this.searchTerm) {
+          const input = this.container.querySelector('.region-search-input');
+          if (input) {
+            input.value = this.searchTerm;
+            this.filterList(this.searchTerm);
+          }
+        }
         document.getElementById(`msc-${this.tabKey}`).classList.add('open');
       }
 
       selectAll(isAll) {
         this.selected = isAll ? AWS_REGIONS.map(r => r.id) : [];
         this.render();
+        if (this.searchTerm) {
+          const input = this.container.querySelector('.region-search-input');
+          if (input) {
+            input.value = this.searchTerm;
+            this.filterList(this.searchTerm);
+          }
+        }
         document.getElementById(`msc-${this.tabKey}`).classList.add('open');
       }
     }
@@ -1435,7 +1487,7 @@
     const regionPickers = {};
 
     document.addEventListener('click', (e) => {
-      ['read', 'write', 'gov'].forEach(tab => {
+      ['read', 'write', 'gov', 'report', 'sync'].forEach(tab => {
         const msc = document.getElementById(`msc-${tab}`);
         if (msc && !msc.contains(e.target)) { msc.classList.remove('open'); }
       });
@@ -1455,6 +1507,8 @@
         regionPickers['read'] = new RegionPicker('read-region-picker', 'read', false);
         regionPickers['write'] = new RegionPicker('write-region-picker', 'write', false);
         regionPickers['gov'] = new RegionPicker('gov-region-picker', 'gov', true);
+        regionPickers['report'] = new RegionPicker('report-region-picker', 'report', true);
+        regionPickers['sync'] = new RegionPicker('sync-region-picker', 'sync', false);
       } catch (e) {
         console.error("Critical Metadata Failure", e);
       }
@@ -1618,11 +1672,13 @@
       }
 
       actionHeader.style.display = 'block';
-      let html = `<div class="table-container"><table><thead><tr><th style="width: 40px"><input type="checkbox" id="select-all-results"></th><th>Resource Name</th><th>ARN</th><th>Tags</th></tr></thead><tbody>`;
+      let html = `<div class="table-container"><table><thead><tr><th style="width: 40px"><input type="checkbox" id="select-all-results"></th><th>Resource Name</th><th>Region</th><th>ARN</th><th>Tags</th></tr></thead><tbody>`;
 
       resources.forEach((r, idx) => {
+        const arnParts = (r.ResourceARN || '').split(':');
+        const region = arnParts[3] || 'global';
         const tags = Object.entries(r.Tags || {}).map(([k, v]) => `<span class="status-badge info">${k}: ${v}</span>`).join('');
-        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${r.Name || '---'}</td><td class="arn-cell">${r.ResourceARN} <span class="help-icon" style="cursor:pointer; background:none" onclick="navigator.clipboard.writeText('${r.ResourceARN}'); toast('ARN Copied', 'success')">📋</span></td><td>${tags}</td></tr>`;
+        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${r.Name || '---'}</td><td><span class="status-badge" style="background: rgba(255,255,255,0.05)">${region}</span></td><td class="arn-cell">${r.ResourceARN} <span class="help-icon" style="cursor:pointer; background:none" onclick="navigator.clipboard.writeText('${r.ResourceARN}'); toast('ARN Copied', 'success')">📋</span></td><td>${tags}</td></tr>`;
       });
 
       html += `</tbody></table></div>`;
@@ -1757,7 +1813,7 @@
         const failedArns = Object.keys(failed);
 
         html += `<div style="margin-bottom: 24px;">
-          <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 0.95rem;">Region: ${reg}</h4>`;
+          <h4 style="margin: 0 0 10px 0; color: #c4b5fd; font-size: 0.95rem;">Region: ${reg}</h4>`;
 
         if (tagged.length) {
           html += `<div class="card" style="border-color: rgba(16, 185, 129, 0.4); margin-bottom:1rem; padding: 1rem; background: rgba(16, 185, 129, 0.05);">
@@ -1802,20 +1858,8 @@
       setTimeout(() => el.remove(), 4000);
     }
 
-    // Report tab
-    regionPickers['report'] = null;
-    regionPickers['sync'] = null;
 
-    document.querySelector('[data-tab="report"]').addEventListener('click', () => {
-      if (!regionPickers['report']) {
-        regionPickers['report'] = new RegionPicker('report-region-picker', 'report', true);
-      }
-    });
-    document.querySelector('[data-tab="sync"]').addEventListener('click', () => {
-      if (!regionPickers['sync']) {
-        regionPickers['sync'] = new RegionPicker('sync-region-picker', 'sync', false);
-      }
-    });
+
 
     document.getElementById('btn-report').onclick = async () => {
       const btn = document.getElementById('btn-report');
@@ -1853,7 +1897,7 @@
           <div class="score-meta">
             <div style="display:flex; justify-content:space-between; align-items:flex-start">
               <h3 style="color:${col}; margin:0">Compliance Scorecard</h3>
-              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:8px 16px; font-size:0.8rem; background:linear-gradient(135deg,#60a5fa,#3b82f6)">Transfer to Batch Fix</button>
+              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:8px 16px; font-size:0.8rem; background:linear-gradient(135deg,#a78bfa,#8b5cf6)">Transfer to Batch Fix</button>
             </div>
             <p>${summary.compliant || 0} of ${summary.total_resources || 0} resources fully tagged<br>
                <span style="color:var(--danger)">${summary.non_compliant || 0} resources</span> need attention</p>
@@ -1890,7 +1934,7 @@
       const btn = document.getElementById('btn-sync');
       const vpcId = document.getElementById('sync-vpc-id').value.trim();
       if (!vpcId) return toast('VPC ID is required.', 'error');
-      const reg = (state.regions['sync'] || [])[0] || 'us-east-1';
+      const reg = (state.regions['sync'] || [])[0] || 'us-east-2';
       btn.disabled = true;
       btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags…';
       try {
@@ -1905,15 +1949,15 @@
 
     function renderSyncResults(data, vpcId) {
       const updated = data.updated_resources || [];
-      let html = `<div class="section-title" style="margin-bottom:1.5rem">VPC Tag Propagation — <code style="font-size:0.85rem;color:#60a5fa">${vpcId}</code></div>`;
+      let html = `<div class="section-title" style="margin-bottom:1.5rem">VPC Tag Propagation — <code style="font-size:0.85rem;color:#a78bfa">${vpcId}</code></div>`;
       if (data.error) {
         html += `<div style="padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;color:var(--danger)">Error: ${data.error}</div>`;
       } else {
         html += `<div class="score-ring" style="margin-bottom:1.5rem">
-          <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,rgba(6,182,212,0.2),rgba(59,130,246,0.2));border:2px solid rgba(6,182,212,0.4);display:flex;align-items:center;justify-content:center;flex-direction:column">
-            <span style="font-size:1.5rem;font-weight:700;color:#67e8f9">${updated.length}</span>
+          <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(217,70,239,0.2));border:2px solid rgba(139,92,246,0.4);display:flex;align-items:center;justify-content:center;flex-direction:column">
+            <span style="font-size:1.5rem;font-weight:700;color:#e879f9">${updated.length}</span>
           </div>
-          <div class="score-meta"><h3 style="color:#67e8f9">Resources Updated</h3><p>Tags propagated from <b>${vpcId}</b> to all child network resources.</p></div>
+          <div class="score-meta"><h3 style="color:#e879f9">Resources Updated</h3><p>Tags propagated from <b>${vpcId}</b> to all child network resources.</p></div>
         </div>`;
         if (updated.length) {
           html += `<div class="sync-resource-list">${updated.map(a => `• ${a}`).join('<br>')}</div>`;

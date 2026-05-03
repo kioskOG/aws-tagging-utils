@@ -1,35 +1,30 @@
-import logging
-import os
 import json
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from src.clients import get_ec2_client, get_sts_client, get_tagging_client
+from src.config import DEFAULT_REGION
+from src.logging_config import get_logger
 
-DEFAULT_REGION = os.environ.get("AWS_REGION", "us-east-2")
+logger = get_logger(__name__)
 
-def get_tagging_client(region: str):
-    return boto3.client("resourcegroupstaggingapi", region_name=region)
+def _get_tagging_client(region: str):
+    return get_tagging_client(region)
 
-def get_ec2_client(region: str):
-    return boto3.client("ec2", region_name=region)
+def _get_ec2_client(region: str):
+    return get_ec2_client(region)
 
-def get_sts_client():
-    return boto3.client("sts")
-
-def get_account_id() -> str:
+def _get_account_id() -> str:
     return get_sts_client().get_caller_identity()["Account"]
 
 def sync_vpc_tags(region: str, vpc_id: str) -> Dict[str, Any]:
     """
     Propagate tags from a VPC to its child resources (Subnets, SGs, RTs, etc.)
     """
-    ec2 = get_ec2_client(region)
-    tag_api = get_tagging_client(region)
-    account_id = get_account_id()
+    ec2 = _get_ec2_client(region)
+    tag_api = _get_tagging_client(region)
+    account_id = _get_account_id()
     
     logger.info("Syncing tags for VPC %s in %s", vpc_id, region)
     

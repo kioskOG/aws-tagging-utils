@@ -12,23 +12,23 @@ Deploy: subscribe this Lambda to EventBridge; grant `tag:GetResources` and
 from __future__ import annotations
 
 import json
-import logging
-import os
 import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from src.clients import get_cloudtrail_client, get_ec2_client, get_tagging_client
+from src.config import (
+    DEFAULT_REGION,
+    OWNER_TAG_KEY,
+    TAG_API_BATCH_SIZE as TAG_API_BATCH,
+    TAG_LOOKUP_DELAY_SEC,
+    TAG_LOOKUP_RETRIES,
+)
+from src.logging_config import get_logger
 
-DEFAULT_REGION = os.environ.get("AWS_REGION", "us-east-2")
-OWNER_TAG_KEY = os.environ.get("OWNER_TAG_KEY", "Owner")
-TAG_API_BATCH = 20
-TAG_LOOKUP_RETRIES = 10
-TAG_LOOKUP_DELAY_SEC = 1.5
+logger = get_logger(__name__)
 
 DetailFn = Callable[[Dict[str, Any], Dict[str, Any]], List[str]]
 
@@ -416,12 +416,12 @@ def owner_from_user_identity(uid: Any) -> Optional[str]:
     return str(pid)[:256] if pid else None
 
 
-def get_tagging_client(region: str):
-    return boto3.client("resourcegroupstaggingapi", region_name=region)
+def _get_tagging_client(region: str):
+    return get_tagging_client(region)
 
 
-def get_cloudtrail_client(region: str):
-    return boto3.client("cloudtrail", region_name=region)
+def _get_cloudtrail_client(region: str):
+    return get_cloudtrail_client(region)
 
 
 def fetch_tags_for_arns(client, arns: List[str]) -> Dict[str, Dict[str, str]]:
@@ -484,7 +484,7 @@ def tag_untagged_arns(client, arns: List[str], owner_value: str) -> Tuple[List[s
 
 
 def lookup_owner_for_resource(region: str, resource_arn: str) -> Optional[str]:
-    client = get_cloudtrail_client(region)
+    client = _get_cloudtrail_client(region)
     resource_id = resource_arn.split(":")[-1].split("/")[-1]
     
     for search_val in [resource_id, resource_arn]:
@@ -542,7 +542,7 @@ def parse_detail(event: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]
 
 def get_all_regions() -> List[str]:
     try:
-        ec2 = boto3.client("ec2", region_name=DEFAULT_REGION)
+        ec2 = get_ec2_client(DEFAULT_REGION)
         regs = ec2.describe_regions()
         return [r["RegionName"] for r in regs["Regions"]]
     except Exception:

@@ -1,0 +1,465 @@
+openapi: 3.0.3
+info:
+  title: AWS Tagging Utils API
+  version: 1.0.0
+  description: Enterprise API for AWS tagging governance, FinOps, and compliance.
+paths:
+  /health:
+    get:
+      summary: Lightweight health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /api/meta/resource-types:
+    get:
+      summary: Get supported resource types
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aliases:
+                    type: array
+                    items:
+                      type: string
+                  map:
+                    type: object
+  /api/read:
+    post:
+      summary: Read tags from AWS resources
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '500':
+          $ref: '#/components/responses/StandardError'
+  /api/write:
+    post:
+      summary: Write tags to AWS resources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arn:
+                  type: string
+                arns:
+                  type: array
+                  items:
+                    type: string
+                tags:
+                  type: object
+      responses:
+        '200':
+          description: Fully successful write
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+        '207':
+          description: Partial success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  details:
+                    type: object
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '500':
+          $ref: '#/components/responses/StandardError'
+  /api/gov:
+    post:
+      summary: Validate tags against governance rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/StandardError'
+  /api/report:
+    post:
+      summary: Generate a synchronous compliance report
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '500':
+          $ref: '#/components/responses/StandardError'
+  /api/sync:
+    post:
+      summary: Sync tags across accounts/regions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '500':
+          $ref: '#/components/responses/StandardError'
+  /api/compliance/refresh:
+    post:
+      summary: Trigger a background compliance refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                regions:
+                  type: array
+                  items:
+                    type: string
+                mandatory_tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '202':
+          description: Refresh started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        '200':
+          description: Already refreshing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /api/compliance/status:
+    get:
+      summary: Get status of background compliance refresh
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_refreshing:
+                    type: boolean
+                  is_stale:
+                    type: boolean
+                  last_refresh_error:
+                    type: string
+                    nullable: true
+  /api/compliance/summary:
+    get:
+      summary: Get compliance summary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compliance_pct:
+                    type: number
+                  total_resources:
+                    type: integer
+                  compliant:
+                    type: integer
+                  non_compliant:
+                    type: integer
+                  _meta:
+                    type: object
+  /api/dashboard:
+    get:
+      summary: Get dashboard statistics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compliance_pct:
+                    type: number
+                  total_resources:
+                    type: integer
+                  compliant_resources:
+                    type: integer
+                  non_compliant_resources:
+                    type: integer
+                  active_violations:
+                    type: integer
+                  pending_remediation:
+                    type: integer
+                  active_exemptions:
+                    type: integer
+                  protected_violations:
+                    type: integer
+                  total_spend:
+                    type: number
+                  tagged_spend:
+                    type: number
+                  unallocated_spend:
+                    type: number
+                  allocation_pct:
+                    type: number
+                  _meta:
+                    type: object
+  /api/schema:
+    get:
+      summary: Get governance schema definitions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    tag:
+                      type: string
+                    required:
+                      type: boolean
+                    protected:
+                      type: boolean
+                    finops:
+                      type: boolean
+                    allowed_values:
+                      type: array
+                      items:
+                        type: string
+                    regex:
+                      type: string
+                    description:
+                      type: string
+  /api/compliance:
+    get:
+      summary: Get compliance resource list
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                        account:
+                          type: string
+                        region:
+                          type: string
+                        status:
+                          type: string
+                        missing_tags:
+                          type: array
+                          items:
+                            type: string
+                        invalid_tags:
+                          type: array
+                          items:
+                            type: string
+                        protected_violations:
+                          type: array
+                          items:
+                            type: string
+                        remediation_state:
+                          type: string
+                        exemption_state:
+                          type: string
+                  _meta:
+                    type: object
+  /api/finops:
+    get:
+      summary: Get FinOps report (stale-while-revalidate)
+      responses:
+        '200':
+          description: OK (Cached Data)
+          content:
+            application/json:
+              schema:
+                type: object
+        '202':
+          description: Not ready (Refreshing)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+                  _meta:
+                    type: object
+  /api/finops/refresh:
+    post:
+      summary: Trigger a background FinOps refresh
+      responses:
+        '202':
+          description: Refresh started
+        '200':
+          description: Already refreshing
+  /api/finops/status:
+    get:
+      summary: Get status of background FinOps refresh
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_refreshing:
+                    type: boolean
+                  is_stale:
+                    type: boolean
+                  last_refresh_error:
+                    type: string
+                    nullable: true
+  /api/audit:
+    get:
+      summary: Get recent audit logs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit_events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        timestamp:
+                          type: string
+                        actor:
+                          type: string
+                        action:
+                          type: string
+                        resource_arn:
+                          type: string
+                        result:
+                          type: string
+                        details:
+                          type: object
+                        request_id:
+                          type: string
+                  _meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+  /api/security:
+    get:
+      summary: Get security status (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+  /api/organization:
+    get:
+      summary: Get organization details (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+  /api/remediation:
+    get:
+      summary: Get remediation status (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+  /api/exemptions:
+    get:
+      summary: Get exemptions (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+  /api/cicd:
+    get:
+      summary: Get CI/CD metrics (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+
+components:
+  schemas:
+    APIError:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+  responses:
+    StandardError:
+      description: Standard API Error Response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'

@@ -101,6 +101,49 @@ def resource_types():
     aliases = sorted(RESOURCE_TYPE_MAP.keys())
     return jsonify({"aliases": aliases, "map": RESOURCE_TYPE_MAP})
 
+import yaml
+from pathlib import Path
+
+@app.get("/api/openapi.json")
+def api_openapi_json():
+    """Serves the OpenAPI specification."""
+    openapi_path = _ROOT / "config" / "openapi.yaml"
+    if not openapi_path.exists():
+        raise APIError("OpenAPI specification not found.", status_code=404)
+        
+    with open(openapi_path, "r", encoding="utf-8") as f:
+        spec = yaml.safe_load(f)
+    return jsonify(spec)
+
+@app.get("/api/docs")
+def api_docs():
+    """Serves the interactive Swagger UI."""
+    # Using standard Swagger UI CDN unpkg
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>API Documentation</title>
+      <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+    </head>
+    <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js" crossorigin></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: '/api/openapi.json',
+          dom_id: '#swagger-ui',
+        });
+      };
+    </script>
+    </body>
+    </html>
+    """
+    return html
+
 
 @app.post("/api/read")
 def api_read():

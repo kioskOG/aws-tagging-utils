@@ -86,9 +86,10 @@ class FinOpsReportGenerator:
                                 tagged_spend += amount
                                 
             report["TaggedSpend"] = tagged_spend
-            report["UntaggedSpend"] = max(0.0, report["TotalSpend"] - tagged_spend)
             
-            if report["TotalSpend"] > 0:
-                report["AllocationPercentage"] = round((report["TaggedSpend"] / report["TotalSpend"]) * 100, 2)
+        report["UntaggedSpend"] = max(0.0, report["TotalSpend"] - report["TaggedSpend"])
+        
+        if report["TotalSpend"] > 0:
+            report["AllocationPercentage"] = round((report["TaggedSpend"] / report["TotalSpend"]) * 100, 2)
 
         return report

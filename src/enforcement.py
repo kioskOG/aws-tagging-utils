@@ -54,7 +54,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         detail_type = envelope.get("detail-type") or event.get("detail-type") or ""
         # Tag Change (Drift) handling
         if detail_type == "Tag Change on Resource":
-            return process_drift_event(event)
+            return handle_tag_change_event(event)
+
 
         logger.warning(f"Unsupported event type: {detail_type}")
         return {"statusCode": 400, "body": "Unsupported event type"}

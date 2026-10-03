@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
 from botocore.exceptions import BotoCoreError, ClientError
+import boto3
 
 # Try to import from tag_read to reuse RESOURCE_TYPE_MAP
 try:

@@ -53,6 +53,9 @@ class TestLambdaHandler:
 
     @patch("src.tag_writer.get_client")
     def test_successful_tag(self, mock_get_client):
+        import src.tag_writer as tw
+        tw.GOVERNANCE_STRICT_MODE = False
+
         mock_client = MagicMock()
         mock_client.tag_resources.return_value = {"FailedResourcesMap": {}}
         mock_get_client.return_value = mock_client
@@ -69,6 +72,9 @@ class TestLambdaHandler:
 
     @patch("src.tag_writer.get_client")
     def test_partial_failure_returns_207(self, mock_get_client):
+        import src.tag_writer as tw
+        tw.GOVERNANCE_STRICT_MODE = False
+
         mock_client = MagicMock()
         mock_client.tag_resources.return_value = {
             "FailedResourcesMap": {

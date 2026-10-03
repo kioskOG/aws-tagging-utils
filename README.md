@@ -11,11 +11,14 @@ It includes:
 * **TagOnCreate**: auto-tags new resources with an `Owner` tag based on the creator's identity
 * **TagReport**: generates a compliance scorecard and coverage report
 * **TagSync**: propagates tags from parent resources (like VPCs) to children
+* **Governance Engine**: A central schema-driven validation engine integrated into Lambdas and CLI.
+* **Enforcement & Remediation**: Event-driven detection, notifications, and grace-period-based remediation across AWS Organizations.
+* **FinOps & Security (Part 3)**: Cost Explorer integration, protected-tag drift detection, CMDB abstractions, and SARIF output.
 
-These Lambdas are useful for:
+These tools are useful for:
 
 * internal inventory lookup
-* tag-based governance
+* tag-based governance and preventative guardrails (via CI/CD CLI)
 * resource discovery by org, service, pod, environment, or any custom tag
 * internal self-service platforms
 * operational tagging workflows
@@ -250,6 +253,22 @@ TagSync ensures tag consistency by propagating tags from "Parent" resources to t
 | --- | --- | --- |
 | `OWNER_TAG_KEY` | `Owner` | Tag key for creator attribution |
 | `AWS_REGION` | `us-east-2` | Primary/Fallback region |
+| `GOVERNANCE_SCHEMA_PATH` | `config/tag-schema.yaml` | Path to the tag dictionary |
+| `GOVERNANCE_STRICT_MODE` | `true` | Fail tag writes if invalid |
+| `GOVERNANCE_UNKNOWN_TAGS`| `warn` | Behavior for schema-absent tags |
+| `GOVERNANCE_DYNAMODB_TABLE` | `TagGovernanceState` | DynamoDB state store table |
+| `GOVERNANCE_SNS_TOPIC_ARN` | `""` | SNS topic for notifications |
+| `GOVERNANCE_REMEDIATION_ENABLED` | `true` | Enable remediation engine |
+| `GOVERNANCE_GRACE_PERIOD_DAYS` | `7` | Days before escalation/termination |
+| `GOVERNANCE_TERMINATION_ENABLED` | `false` | Enable destructive termination (Disabled by default) |
+| `MULTI_ACCOUNT_ROLE_NAME` | `AWSOrganizationTagGovernanceRole` | Role to assume in member accounts |
+| `FINOPS_ENABLED` | `true` | Enable FinOps cost queries |
+| `DRIFT_ENABLED` | `true` | Detect tag drift |
+| `DRIFT_AUTO_REVERT` | `false` | Auto-revert unauthorized tag changes |
+| `RBAC_ENABLED` | `false` | Enable ownership-based authorization |
+| `OBSERVABILITY_ENABLED` | `true` | Enable EMF CloudWatch metrics |
+
+For more details on the engine and remediation lifecycle, see [docs/tag_governance.md](docs/tag_governance.md), [docs/cli.md](docs/cli.md), [docs/ENFORCEMENT.md](docs/ENFORCEMENT.md), [docs/REMEDIATION.md](docs/REMEDIATION.md), [docs/MULTI_ACCOUNT.md](docs/MULTI_ACCOUNT.md), and [docs/FINOPS.md](docs/FINOPS.md).
 
 ---
 

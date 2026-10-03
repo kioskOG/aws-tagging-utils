@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role for Cross-Account Tag Governance'
+
+Resources:
+  TagGovernanceExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWSOrganizationTagGovernanceRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${ManagementAccountId}:root'
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: TagGovernancePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - tag:GetResources
+                  - tag:TagResources
+                  - ec2:DescribeRegions
+                  # ... other read/tag permissions ...
+                Resource: '*'
+              # Add permissions for remediation (e.g. termination) only if explicitly required and isolated
+
+Parameters:
+  ManagementAccountId:
+    Type: String
+    Description: The AWS Account ID of the central governance account.

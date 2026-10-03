@@ -25,10 +25,23 @@ from src.config import (
     TAG_API_BATCH_SIZE as TAG_API_BATCH,
     TAG_LOOKUP_DELAY_SEC,
     TAG_LOOKUP_RETRIES,
+    GOVERNANCE_SCHEMA_PATH,
+    GOVERNANCE_UNKNOWN_TAGS,
+    GOVERNANCE_NORMALIZATION
 )
 from src.logging_config import get_logger
+from src.governance.engine import TagGovernanceEngine
+from src.governance.schema_provider import FileSchemaProvider
 
 logger = get_logger(__name__)
+
+# Initialize Governance Engine
+schema_provider = FileSchemaProvider(GOVERNANCE_SCHEMA_PATH)
+governance_engine = TagGovernanceEngine(
+    schema_provider=schema_provider,
+    unknown_tags_behavior=GOVERNANCE_UNKNOWN_TAGS,
+    enable_normalization=GOVERNANCE_NORMALIZATION
+)
 
 DetailFn = Callable[[Dict[str, Any], Dict[str, Any]], List[str]]
 
@@ -467,10 +480,15 @@ def tag_untagged_arns(client, arns: List[str], owner_value: str) -> Tuple[List[s
     tagged: List[str] = []
     failed: Dict[str, Any] = {}
     tags = {OWNER_TAG_KEY: owner_value}
+    
+    # Normalize and validate default tag with governance engine
+    val_res = governance_engine.evaluate(tags)
+    tags_to_apply = val_res.normalized_tags if val_res.normalized_tags else tags
+    
     for i in range(0, len(arns), TAG_API_BATCH):
         batch = arns[i : i + TAG_API_BATCH]
         try:
-            resp = client.tag_resources(ResourceARNList=batch, Tags=tags)
+            resp = client.tag_resources(ResourceARNList=batch, Tags=tags_to_apply)
         except (ClientError, BotoCoreError) as e:
             for a in batch:
                 failed[a] = {"ErrorMessage": str(e)}

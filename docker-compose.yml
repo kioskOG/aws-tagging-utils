@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-tagging-utils:latest
+    ports:
+      - "5050:5050"
+    environment:
+      # AWS credentials should ideally be injected at runtime or mounted
+      # e.g., via ~/.aws/credentials or instance roles
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-2}
+    volumes:
+      - sqlite_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-tagging-utils:latest
+    command: ["python", "mcp_server.py"]
+    environment:
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-2}
+    volumes:
+      - sqlite_data:/app/data
+    restart: on-failure
+
+volumes:
+  sqlite_data:

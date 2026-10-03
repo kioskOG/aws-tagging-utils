@@ -3,10 +3,26 @@ from typing import Any, Dict, List, Optional
 from botocore.exceptions import BotoCoreError, ClientError
 
 from src.clients import get_tagging_client
-from src.config import DEFAULT_REGION
+from src.config import (
+    DEFAULT_REGION, 
+    GOVERNANCE_SCHEMA_PATH, 
+    GOVERNANCE_UNKNOWN_TAGS, 
+    GOVERNANCE_STRICT_MODE,
+    GOVERNANCE_NORMALIZATION
+)
 from src.logging_config import get_logger
+from src.governance.engine import TagGovernanceEngine
+from src.governance.schema_provider import FileSchemaProvider
 
 logger = get_logger(__name__)
+
+# Initialize Governance Engine
+schema_provider = FileSchemaProvider(GOVERNANCE_SCHEMA_PATH)
+governance_engine = TagGovernanceEngine(
+    schema_provider=schema_provider,
+    unknown_tags_behavior=GOVERNANCE_UNKNOWN_TAGS,
+    enable_normalization=GOVERNANCE_NORMALIZATION
+)
 
 
 def get_client(region: str):
@@ -85,7 +101,22 @@ def lambda_handler(event, context):
         if not tags or not isinstance(tags, dict):
             raise ValueError("Field 'tags' must be a non-empty object.")
 
-        result = tag_resources(arns, tags, region)
+        # Governance Engine: Normalize and Validate
+        validation_result = governance_engine.evaluate(tags)
+        
+        if GOVERNANCE_STRICT_MODE and not validation_result.compliant:
+            logger.warning("Tag validation failed in strict mode: %s", validation_result.violations)
+            return build_response(400, {
+                "message": "Tag validation failed",
+                "violations": validation_result.to_dict()["violations"]
+            })
+            
+        if not validation_result.compliant:
+            logger.warning("Tag validation warnings (proceeding because strict mode is off): %s", validation_result.violations)
+
+        tags_to_apply = validation_result.normalized_tags
+
+        result = tag_resources(arns, tags_to_apply, region)
 
         if result["failed_resources"]:
             return build_response(207, {

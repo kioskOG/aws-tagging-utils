@@ -1,0 +1,52 @@
+tags:
+  Owner:
+    description: "The team or individual who owns the resource"
+    required: true
+    data_type: "string"
+    
+  Environment:
+    description: "Deployment environment"
+    required: true
+    allowed_values:
+      - dev
+      - qa
+      - staging
+      - prod
+      - sandbox
+
+  CostCenter:
+    description: "6-digit cost center code"
+    required: false
+    pattern: "^[0-9]{6}$"
+    
+  Application:
+    description: "Name of the application"
+    required: false
+    
+  DataClassification:
+    description: "Sensitivity of the data stored"
+    required: false
+    allowed_values:
+      - Public
+      - Internal
+      - Confidential
+      - Restricted
+
+normalization:
+  CostCenter:
+    aliases:
+      - costcenter
+      - Costcenter
+      - COSTCENTER
+      - Cost-Center
+      - cost-center
+  Environment:
+    aliases:
+      - env
+      - Env
+      - environment
+  Owner:
+    aliases:
+      - owner
+      - Contact
+      - contact

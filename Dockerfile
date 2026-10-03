@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # Copy source
 COPY src/ src/
+COPY web/ web/
+COPY config/ config/
 COPY mcp_server.py .
 
 # ─── Runtime Stage ───────────────────────────────────────────────────
@@ -27,7 +29,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY --from=builder /app/src/ src/
+COPY --from=builder /app/web/ web/
+COPY --from=builder /app/config/ config/
 COPY --from=builder /app/mcp_server.py .
+
 
 # Ensure src is importable
 ENV PYTHONPATH="/app"
@@ -35,11 +40,17 @@ ENV PYTHONUNBUFFERED="1"
 ENV LOG_FORMAT="json"
 ENV LOG_LEVEL="INFO"
 
+# Ensure data directory exists and is writable for SQLite persistence
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
+ENV SQLITE_DB_PATH="/app/data/app.db"
+
 USER appuser
 
-# Health check (validates import chain works)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "from src.config import DEFAULT_REGION; print('ok')" || exit 1
+EXPOSE 5050
 
-# Default: run MCP server
-ENTRYPOINT ["python", "mcp_server.py"]
+# Health check hits the /health endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)" || exit 1
+
+# Default: run Flask Web API
+CMD ["python", "-m", "flask", "--app", "web.app", "run", "--host=0.0.0.0", "--port=5050"]

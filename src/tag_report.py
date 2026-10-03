@@ -52,10 +52,29 @@ except ImportError:
         }
 
 from src.clients import get_ec2_client, get_s3_client, get_tagging_client
-from src.config import DEFAULT_REGION, MANDATORY_TAGS, REPORT_BUCKET
+from src.config import (
+    DEFAULT_REGION, 
+    MANDATORY_TAGS, 
+    REPORT_BUCKET,
+    GOVERNANCE_SCHEMA_PATH,
+    GOVERNANCE_UNKNOWN_TAGS,
+    GOVERNANCE_NORMALIZATION
+)
 from src.logging_config import get_logger
+from src.governance.engine import TagGovernanceEngine
+from src.governance.schema_provider import FileSchemaProvider
+from src.multi_account import CrossAccountManager
 
 logger = get_logger(__name__)
+
+
+# Initialize Governance Engine
+schema_provider = FileSchemaProvider(GOVERNANCE_SCHEMA_PATH)
+governance_engine = TagGovernanceEngine(
+    schema_provider=schema_provider,
+    unknown_tags_behavior=GOVERNANCE_UNKNOWN_TAGS,
+    enable_normalization=GOVERNANCE_NORMALIZATION
+)
 
 def get_client(region: str):
     return get_tagging_client(region)
@@ -113,14 +132,15 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str], resour
                     arn = item.get("ResourceARN", "")
                     tags = {t["Key"]: t["Value"] for t in item.get("Tags", [])}
                     
-                    missing = [t for t in mandatory_tags if t not in tags or not str(tags[t]).strip()]
-                    is_compliant = len(missing) == 0
+                    validation_result = governance_engine.evaluate(tags, resource_id=arn)
+                    is_compliant = validation_result.compliant
                     
                     res_info = {
                         "ResourceARN": arn,
                         "IsCompliant": is_compliant,
-                        "MissingTags": missing,
-                        "Tags": tags
+                        "Violations": [v.to_dict() for v in validation_result.violations],
+                        "Tags": tags,
+                        "NormalizedTags": validation_result.normalized_tags
                     }
                     
                     region_report["resources"].append(res_info)
@@ -147,6 +167,25 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str], resour
         report["summary"]["compliance_score"] = round((report["summary"]["compliant"] / report["summary"]["total_resources"]) * 100, 2)
         
     return report
+
+def generate_organization_report(regions: List[str], mandatory_tags: List[str] = MANDATORY_TAGS, resource_types: List[str] = None):
+    """
+    Mock implementation of cross-account scanning.
+    In a real scenario, this would:
+    1. Call organizations:ListAccounts
+    2. Iterate over accounts
+    3. Use CrossAccountManager.assume_role(account_id)
+    4. Pass the assumed session to generate_report
+    """
+    logger.info("Generating organization-wide report...")
+    org_client = boto3.client('organizations')
+    try:
+        # Paginator for accounts would go here
+        pass
+    except Exception as e:
+        logger.warning("Not in an AWS Organization or lack permissions. Generating local only.")
+        
+    return generate_report(regions, mandatory_tags, resource_types)
 
 def lambda_handler(event, context):
     logger.info("Received event: %s", event)

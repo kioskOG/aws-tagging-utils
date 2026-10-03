@@ -46,7 +46,8 @@ LICENSE
 
 # Local dev files
 scratch/
-web/
+.env
+*.db
 .pre-commit-config.yaml
 Makefile
 pytest.ini

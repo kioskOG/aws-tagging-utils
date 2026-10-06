@@ -44,7 +44,7 @@ def test_audit_successful_write(client):
     
     event = events[0]
     assert event["action"] == "TAG_WRITE"
-    assert event["actor"] == "anonymous"
+    assert event["actor"] == "test-admin"
     assert event["resource_arn"] == payload["arn"]
     assert event["result"] == "SUCCESS"
     assert event["request_id"] == "test-req-1"
@@ -122,7 +122,7 @@ def test_audit_query_ordering_and_limit(client):
     # Insert multiple
     for i in range(5):
         db.insert_audit_log(
-            actor="anonymous", action="TAG_WRITE", resource_arn=f"arn{i}", result="SUCCESS"
+            actor="test-admin", action="TAG_WRITE", resource_arn=f"arn{i}", result="SUCCESS"
         )
         
     audit_resp = client.get("/api/audit?limit=2")

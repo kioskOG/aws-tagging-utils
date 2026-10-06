@@ -6,7 +6,8 @@ WORKDIR /app
 # Install build dependencies
 COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir PyYAML
 
 # Copy source
 COPY src/ src/
@@ -33,7 +34,6 @@ COPY --from=builder /app/web/ web/
 COPY --from=builder /app/config/ config/
 COPY --from=builder /app/mcp_server.py .
 
-
 # Ensure src is importable
 ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED="1"
@@ -49,8 +49,8 @@ USER appuser
 EXPOSE 5050
 
 # Health check hits the /health endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)" || exit 1
 
-# Default: run Flask Web API
-CMD ["python", "-m", "flask", "--app", "web.app", "run", "--host=0.0.0.0", "--port=5050"]
+# Default: run Flask Web API (production mode, no debug, bound to all interfaces)
+CMD ["python", "-m", "flask", "--app", "web.app", "run", "--host=0.0.0.0", "--port=5050", "--no-debugger", "--no-reload"]

@@ -23,3 +23,7 @@ class AuthorizationPolicy:
     @staticmethod
     def can_manage_protected_tags(identity: UserIdentity) -> bool:
         return Role.SECURITY_ADMIN in identity.roles or Role.PLATFORM_ADMIN in identity.roles
+
+    @staticmethod
+    def can_manage_exemptions(identity: UserIdentity) -> bool:
+        return Role.SECURITY_ADMIN in identity.roles or Role.PLATFORM_ADMIN in identity.roles

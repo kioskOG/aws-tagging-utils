@@ -39,7 +39,16 @@ GOVERNANCE_SNS_TOPIC_ARN: str = os.environ.get("GOVERNANCE_SNS_TOPIC_ARN", "")
 GOVERNANCE_REMEDIATION_ENABLED: bool = os.environ.get("GOVERNANCE_REMEDIATION_ENABLED", "true").lower() == "true"
 GOVERNANCE_GRACE_PERIOD_DAYS: int = int(os.environ.get("GOVERNANCE_GRACE_PERIOD_DAYS", "7"))
 GOVERNANCE_TERMINATION_ENABLED: bool = os.environ.get("GOVERNANCE_TERMINATION_ENABLED", "false").lower() == "true"
+MAX_REMEDIATION_ATTEMPTS: int = int(os.environ.get("MAX_REMEDIATION_ATTEMPTS", "3"))
 MULTI_ACCOUNT_ROLE_NAME: str = os.environ.get("MULTI_ACCOUNT_ROLE_NAME", "AWSOrganizationTagGovernanceRole")
+
+# ── Worker & Async (Phase 2D) ────────────────────────────────────────
+WORKER_ENABLED: bool = os.environ.get("WORKER_ENABLED", "false").lower() == "true"
+SQS_QUEUE_URL: str = os.environ.get("SQS_QUEUE_URL", "")
+SQS_WAIT_TIME_SECONDS: int = int(os.environ.get("SQS_WAIT_TIME_SECONDS", "20"))
+SQS_VISIBILITY_TIMEOUT_SECONDS: int = int(os.environ.get("SQS_VISIBILITY_TIMEOUT_SECONDS", "900")) # 15 min default
+SQS_MAX_MESSAGES: int = int(os.environ.get("SQS_MAX_MESSAGES", "10"))
+WORKER_SHUTDOWN_TIMEOUT_SECONDS: int = int(os.environ.get("WORKER_SHUTDOWN_TIMEOUT_SECONDS", "30"))
 
 # ── FinOps, Security & Enterprise (Part 3) ───────────────────────────
 FINOPS_ENABLED: bool = os.environ.get("FINOPS_ENABLED", "true").lower() == "true"

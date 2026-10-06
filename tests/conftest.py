@@ -11,6 +11,10 @@ def global_isolate_db(tmp_path, monkeypatch):
     db_file = tmp_path / "test_global.db"
     monkeypatch.setenv("SQLITE_DB_PATH", str(db_file))
     
+    # Enable test auth mode so existing tests pass
+    monkeypatch.setenv("AUTH_MODE", "local_dev")
+    monkeypatch.setenv("DEV_AUTH_USER", "test-admin:PlatformAdmin")
+    
     import src.db as db
     db.DB_PATH = db_file
     db._local = threading.local()

@@ -1,210 +1,261 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone, timedelta
+import hashlib
+import json
 
 from src.governance.models import ValidationResult
 from src.governance.state import GovernanceStateStore
 from src.governance.exemptions import ExemptionManager
 from src.governance.audit import AuditLogger
 from src.governance.notifications import NotificationProvider
-from src.config import GOVERNANCE_GRACE_PERIOD_DAYS, GOVERNANCE_TERMINATION_ENABLED
+from src.config import GOVERNANCE_GRACE_PERIOD_DAYS, MAX_REMEDIATION_ATTEMPTS
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-class RemediationAction(ABC):
-    @abstractmethod
-    def validate(self, context: Dict[str, Any]) -> bool:
-        pass
-        
-    @abstractmethod
-    def execute(self, context: Dict[str, Any]) -> bool:
-        pass
-
-
-class NormalizeTagsAction(RemediationAction):
-    def validate(self, context: Dict[str, Any]) -> bool:
-        return "normalized_tags" in context and context.get("current_tags") != context.get("normalized_tags")
-        
-    def execute(self, context: Dict[str, Any]) -> bool:
-        # In a real implementation, this would call TagWriter to update the resource's tags
-        logger.info("Executing NormalizeTagsAction for %s", context.get("resource_id"))
-        AuditLogger.log("TAG_REMEDIATED", "NORMALIZE_TAG", context.get("account_id"), context.get("region"), context.get("resource_id"), context.get("resource_type"), "SUCCESS")
-        return True
-
-
-class NotifyOwnerAction(RemediationAction):
-    def __init__(self, provider: NotificationProvider):
-        self.provider = provider
-        
-    def validate(self, context: Dict[str, Any]) -> bool:
-        return self.provider is not None
-        
-    def execute(self, context: Dict[str, Any]) -> bool:
-        logger.info("Executing NotifyOwnerAction for %s", context.get("resource_id"))
-        success = self.provider.notify(
-            "WARNING", 
-            "Resource is non-compliant with tagging governance policies", 
-            context
-        )
-        AuditLogger.log("OWNER_NOTIFIED", "SEND_WARNING", context.get("account_id"), context.get("region"), context.get("resource_id"), context.get("resource_type"), "SUCCESS" if success else "FAILED")
-        return success
-
-
-class RevertProtectedTagAction(RemediationAction):
-    def execute(self, account_id: str, region: str, resource_type: str, resource_id: str, tags: Dict[str, str], val_res: ValidationResult) -> Dict[str, Any]:
-        """
-        Reverts an unauthorized change to a protected tag.
-        In a full implementation, it would determine the expected value (from state, schema, or CMDB) and revert.
-        """
-        from src.config import DRIFT_AUTO_REVERT
-        
-        if not DRIFT_AUTO_REVERT:
-            logger.info("DRIFT_AUTO_REVERT is false. Skipping reversion of protected tag for %s", resource_id)
-            return {"action": "REVERT_SKIPPED"}
-            
-        logger.info("Reverting protected tags for %s", resource_id)
-        # Mocking the boto3 call to revert the tag
-        # In reality we would call ec2/s3 tag API to set the value back to normal
-        return {"action": "REVERT_EXECUTED", "resource_id": resource_id}
-
-class TerminateResourceAction(RemediationAction):
-    def validate(self, context: Dict[str, Any]) -> bool:
-        if not GOVERNANCE_TERMINATION_ENABLED:
-            logger.info("Termination action blocked: GOVERNANCE_TERMINATION_ENABLED is False")
-            return False
-            
-        state = context.get("state", {})
-        if not state:
-            return False
-            
-        # Verify grace period expired
-        remediation_deadline = state.get("remediation_deadline")
-        if not remediation_deadline:
-            return False
-            
-        try:
-            deadline_dt = datetime.fromisoformat(remediation_deadline.replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) <= deadline_dt:
-                logger.info("Termination action blocked: grace period not expired")
-                return False
-        except Exception:
-            return False
-            
-        # Needs to verify resource is still non-compliant
-        val_res = context.get("validation_result")
-        if val_res and val_res.compliant:
-            return False
-            
-        return True
-        
-    def execute(self, context: Dict[str, Any]) -> bool:
-        logger.critical("Executing TerminateResourceAction for %s (Implementation Stub)", context.get("resource_id"))
-        AuditLogger.log("RESOURCE_TERMINATED", "TERMINATE", context.get("account_id"), context.get("region"), context.get("resource_id"), context.get("resource_type"), "SUCCESS")
-        return True
-
-
 class RemediationEngine:
-    def __init__(self, state_store: GovernanceStateStore, exemption_manager: ExemptionManager, notification_provider: NotificationProvider = None):
+    def __init__(self, state_store: GovernanceStateStore, exemption_manager: ExemptionManager, notification_provider: Optional[NotificationProvider] = None):
         self.state_store = state_store
         self.exemption_manager = exemption_manager
         self.notification_provider = notification_provider
-        
-    def process(self, account_id: str, region: str, resource_type: str, resource_id: str, tags: Dict[str, str], validation_result: ValidationResult) -> Dict[str, Any]:
-        """
-        Main entry point for evaluating remediation workflow on a resource.
-        """
-        # 1. Exemption Check
-        exemption = self.exemption_manager.is_exempt(account_id, resource_type, resource_id)
-        if exemption:
-            logger.info("Resource %s is exempt. Reason: %s", resource_id, exemption.get("reason"))
-            # Update state with exemption
-            self._update_state(account_id, region, resource_type, resource_id, "EXEMPT", exemption_id=exemption.get("id"))
-            return {"status": "EXEMPT", "exemption": exemption}
-            
-        if validation_result.compliant:
-            logger.info("Resource %s is compliant", resource_id)
-            self._update_state(account_id, region, resource_type, resource_id, "COMPLIANT")
-            return {"status": "COMPLIANT"}
-            
-        # Resource is Non-Compliant
-        # 2. Check current state
-        state = self.state_store.get_resource_state(resource_id)
-        
-        if not state or state.get("status") == "COMPLIANT":
-            # First time detection or regression
-            now = datetime.now(timezone.utc)
-            deadline = now + timedelta(days=GOVERNANCE_GRACE_PERIOD_DAYS)
-            
-            state = self._update_state(
-                account_id, region, resource_type, resource_id, "NON_COMPLIANT", 
-                first_detected=now.isoformat(), 
-                deadline=deadline.isoformat(),
-                violations=[v.to_dict() for v in validation_result.violations]
-            )
-            
-            AuditLogger.log("TAG_VALIDATION_FAILED", "DETECT", account_id, region, resource_id, resource_type, "SUCCESS", details={"violations": state.get("violations")})
-            
-            # Action: Notify Owner
-            if self.notification_provider:
-                action = NotifyOwnerAction(self.notification_provider)
-                context = {"account_id": account_id, "region": region, "resource_id": resource_id, "resource_type": resource_type, "deadline": state.get("remediation_deadline")}
-                if action.validate(context):
-                    action.execute(context)
-                    
-            # Action: Normalize Tags (Safe)
-            norm_action = NormalizeTagsAction()
-            context = {"account_id": account_id, "region": region, "resource_id": resource_id, "resource_type": resource_type, "current_tags": tags, "normalized_tags": validation_result.normalized_tags}
-            if norm_action.validate(context):
-                norm_action.execute(context)
-                
-            return {"status": "NON_COMPLIANT_DETECTED", "deadline": state.get("remediation_deadline")}
-            
-        # Already tracked as NON_COMPLIANT
-        deadline_str = state.get("remediation_deadline")
-        try:
-            deadline = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) > deadline:
-                # Deadline expired
-                AuditLogger.log("RESOURCE_TERMINATION_ELIGIBLE", "DEADLINE_EXPIRED", account_id, region, resource_id, resource_type, "SUCCESS")
-                
-                term_action = TerminateResourceAction()
-                context = {"account_id": account_id, "region": region, "resource_id": resource_id, "resource_type": resource_type, "state": state, "validation_result": validation_result}
-                if term_action.validate(context):
-                    term_action.execute(context)
-                    self._update_state(account_id, region, resource_type, resource_id, "TERMINATED")
-                    return {"status": "TERMINATED"}
-                else:
-                    return {"status": "TERMINATION_BLOCKED"}
-                    
-            else:
-                # Within grace period, just wait
-                return {"status": "GRACE_PERIOD_ACTIVE", "deadline": deadline_str}
-        except Exception as e:
-            logger.error("Failed to process deadline logic: %s", e)
-            return {"status": "ERROR", "message": str(e)}
 
-    def _update_state(self, account_id: str, region: str, resource_type: str, resource_id: str, status: str, first_detected: str = None, deadline: str = None, exemption_id: str = None, violations: List[Dict] = None) -> Dict[str, Any]:
-        state = self.state_store.get_resource_state(resource_id) or {}
+    def _extract_type(self, arn: str) -> str:
+        parts = arn.split(":")
+        return parts[2] if len(parts) > 2 else "unknown"
+
+    def _extract_account(self, arn: str) -> str:
+        parts = arn.split(":")
+        return parts[4] if len(parts) > 4 else "unknown"
+
+    def process_sync(self, request_data: Dict[str, Any], actor: str, request_id: str) -> Dict[str, Any]:
+        """
+        Main entry point for synchronous API-driven remediation.
+        """
+        # 1. Validate
+        arn = request_data.get("resource_arn")
+        tags = request_data.get("requested_tags")
+        if not arn or not isinstance(tags, dict):
+            from src.errors import APIError
+            raise APIError("resource_arn and requested_tags are required", status_code=400, error_code="INVALID_REQUEST")
+            
+        resource_type = self._extract_type(arn)
+        account_id = self._extract_account(arn)
         
-        state.update({
-            "resource_id": resource_id,
+        # Calculate canonical request fingerprint
+        canon_req = json.dumps({
+            "resource_arn": arn,
+            "resource_type": resource_type,
+            "requested_tags": tags
+        }, sort_keys=True)
+        request_fingerprint = hashlib.sha256(canon_req.encode()).hexdigest()
+        
+        # Determine idempotency key and logical action id
+        idem_key = request_data.get("idempotency_key")
+        if not idem_key:
+            idem_key = request_fingerprint
+            
+        action_id = idem_key # 1:1 mapping as instructed for Phase 2C
+        
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # 2. Exemption Check
+        exemption = self.exemption_manager.is_exempt(account_id, resource_type, arn)
+        status = "SKIPPED_EXEMPT" if exemption else "PENDING"
+        
+        action_data = {
+            "action_id": action_id,
+            "idempotency_key": idem_key,
+            "resource_arn": arn,
             "resource_type": resource_type,
             "account_id": account_id,
-            "region": region,
+            "requested_tags": tags,
+            "actor": actor,
             "status": status,
-            "last_seen_at": datetime.now(timezone.utc).isoformat()
-        })
-        
-        if first_detected:
-            state["first_detected_at"] = first_detected
-        if deadline:
-            state["remediation_deadline"] = deadline
-        if exemption_id:
-            state["exemption_id"] = exemption_id
-        if violations is not None:
-            state["violations"] = violations
+            "attempt_count": 0,
+            "request_fingerprint": request_fingerprint,
+            "created_at": now,
+            "updated_at": now,
+            "request_id": request_id
+        }
+        if exemption:
+            action_data["exemption_id"] = exemption.get("id")
             
-        self.state_store.put_resource_state(state)
-        return state
+        # 3. Create or resolve action
+        created = self.state_store.create_remediation_action(action_data)
+        if not created:
+            # Action exists
+            existing = self.state_store.get_remediation_action(action_id)
+            if not existing:
+                from src.errors import APIError
+                raise APIError("Failed to resolve existing remediation action", status_code=500, error_code="INTERNAL_ERROR")
+            
+            if existing.get("request_fingerprint") and existing.get("request_fingerprint") != request_fingerprint:
+                from src.errors import APIError
+                raise APIError("Idempotency key mismatch", status_code=409, error_code="IDEMPOTENCY_MISMATCH")
+            
+            # If already processing or terminal, return it
+            if existing.get("status") in ("IN_PROGRESS", "COMPLETED", "SKIPPED_EXEMPT", "FAILED"):
+                # But wait, if it's FAILED, we might want to let them retry if they provide a new idem_key? 
+                # If they use the same idem_key, they get the existing FAILED state.
+                # Only FAILED_RETRYABLE can be picked up, but wait, the prompt says "Future Phase 2D will consume FAILED_RETRYABLE actions."
+                # If it's FAILED_RETRYABLE, we CAN retry it now synchronously if they requested it again.
+                if existing.get("status") != "FAILED_RETRYABLE":
+                    # If it's FAILED (permanent), they should make a new request with a new idempotency key if they fixed the issue (e.g. valid tags).
+                    # Actually, if it's derived idempotency key, fixing the tags changes the idempotency key!
+                    return existing
+            
+            action_data = existing
+            
+        if action_data["status"] == "SKIPPED_EXEMPT":
+            from src.db import insert_audit_log
+            ex_id = exemption.get("id") if exemption else None
+            insert_audit_log(actor, "REMEDIATE_SKIPPED", arn, "SUCCESS", details={"exemption_id": ex_id}, request_id=request_id)
+            return action_data
+            
+        # 4. Claim action
+        claimed = self.state_store.claim_remediation_action(action_id, current_statuses=["PENDING", "FAILED_RETRYABLE"], max_attempts=MAX_REMEDIATION_ATTEMPTS)
+        if not claimed:
+            # Someone else claimed it, or status changed, or exhausted max attempts
+            existing_after_claim = self.state_store.get_remediation_action(action_id) or action_data
+            if existing_after_claim.get("status") == "FAILED_RETRYABLE" and existing_after_claim.get("attempt_count", 0) >= MAX_REMEDIATION_ATTEMPTS:
+                # Transition to FAILED due to exhaustion
+                from src.db import insert_audit_log
+                if self.state_store.update_remediation_action(action_id, {"status": "FAILED", "last_error_code": "MAX_RETRIES_EXHAUSTED"}, expected_status="FAILED_RETRYABLE"):
+                    insert_audit_log(actor, "REMEDIATE_FINISHED", arn, "FAILED", details={"action_id": action_id, "error_code": "MAX_RETRIES_EXHAUSTED"}, request_id=request_id)
+                return self.state_store.get_remediation_action(action_id) or existing_after_claim
+            return existing_after_claim
+            
+        from src.db import insert_audit_log
+        insert_audit_log(actor, "REMEDIATE_STARTED", arn, "SUCCESS", details={"action_id": action_id}, request_id=request_id)
+        
+        # 5. Execute Tag Mutation
+        new_status, error_code = self._execute_tag_mutation(tags, arn)
+            
+        # 6. Update action state
+        # Note: attempt_count was atomically incremented during claim_remediation_action
+        updates = {
+            "status": new_status,
+            "last_attempt_at": datetime.now(timezone.utc).isoformat()
+        }
+        if error_code:
+            updates["last_error_code"] = error_code
+            
+        self.state_store.update_remediation_action(action_id, updates, expected_status="IN_PROGRESS")
+        
+        # 7. Audit Outcome
+        insert_audit_log(actor, "REMEDIATE_FINISHED", arn, new_status, details={"action_id": action_id, "error_code": error_code}, request_id=request_id)
+        
+        return self.state_store.get_remediation_action(action_id) or updates
+
+    def _execute_tag_mutation(self, tags: Dict[str, Any], arn: str) -> tuple[str, Optional[str]]:
+        from src.tag_writer import tag_resources, governance_engine
+        from src.config import DEFAULT_REGION, GOVERNANCE_STRICT_MODE
+        from botocore.exceptions import BotoCoreError, ClientError
+        
+        new_status = "FAILED"
+        error_code = None
+        try:
+            # validate tags (engine)
+            val_res = governance_engine.evaluate(tags, arn)
+            if not val_res.compliant and GOVERNANCE_STRICT_MODE:
+                raise ValueError("Tag validation failed in strict mode")
+                    
+            tags_to_apply = val_res.normalized_tags
+            
+            # tag_resources returns {"tagged_count": X, "failed_resources": {...}}
+            result = tag_resources([arn], tags_to_apply, DEFAULT_REGION)
+            
+            if arn in result.get("failed_resources", {}):
+                err = result["failed_resources"][arn]
+                error_code = err.get("ErrorCode", "Unknown")
+                # Classify error
+                if error_code in ("Throttling", "ThrottlingException", "TooManyRequestsException", "InternalError"):
+                    new_status = "FAILED_RETRYABLE"
+                elif error_code in ("AccessDenied", "AccessDeniedException"):
+                    new_status = "FAILED"
+                else:
+                    new_status = "FAILED"
+            else:
+                new_status = "COMPLETED"
+                
+        except ValueError as e:
+            error_code = "VALIDATION_FAILED"
+            new_status = "FAILED"
+        except (ClientError, BotoCoreError) as e:
+            from src.errors import map_boto_error
+            status_code, mapped_code, msg = map_boto_error(e)
+            error_code = mapped_code
+            if mapped_code in ("THROTTLED", "AWS_SERVICE_ERROR"):
+                new_status = "FAILED_RETRYABLE"
+            else:
+                new_status = "FAILED"
+        except Exception as e:
+            error_code = "INTERNAL_ERROR"
+            new_status = "FAILED"
+            
+        return new_status, error_code
+
+    def process_async(self, action_id: str, worker_id: str, correlation_id: str) -> bool:
+        """
+        Processes a remediation action asynchronously.
+        Returns True if the message should be deleted from SQS (success or terminal state).
+        Returns False if the message should be kept in SQS (transient error, failed lease, etc).
+        """
+        action = self.state_store.get_remediation_action(action_id)
+        if not action:
+            logger.error(f"Remediation action {action_id} not found in state store")
+            return False
+
+        status = action.get("status")
+        
+        if status in ("COMPLETED", "FAILED", "SKIPPED_EXEMPT"):
+            logger.info(f"Action {action_id} is already in terminal state: {status}")
+            return True
+            
+        arn = action.get("resource_arn")
+        tags = action.get("requested_tags")
+        actor = action.get("actor", "system")
+        
+        claimed = self.state_store.claim_remediation_action(
+            action_id, 
+            current_statuses=["PENDING", "FAILED_RETRYABLE"], 
+            max_attempts=MAX_REMEDIATION_ATTEMPTS,
+            worker_id=worker_id,
+            lease_duration_seconds=300
+        )
+        
+        if not claimed:
+            action_after = self.state_store.get_remediation_action(action_id)
+            if action_after:
+                if action_after.get("status") == "FAILED_RETRYABLE" and action_after.get("attempt_count", 0) >= MAX_REMEDIATION_ATTEMPTS:
+                    from src.db import insert_audit_log
+                    if self.state_store.update_remediation_action(action_id, {"status": "FAILED", "last_error_code": "MAX_RETRIES_EXHAUSTED"}, expected_status="FAILED_RETRYABLE"):
+                        insert_audit_log(actor, "REMEDIATE_FINISHED", arn, "FAILED", details={"action_id": action_id, "error_code": "MAX_RETRIES_EXHAUSTED", "worker_id": worker_id}, request_id=correlation_id)
+                    return True
+                if action_after.get("status") in ("COMPLETED", "FAILED", "SKIPPED_EXEMPT"):
+                    return True
+            
+            logger.info(f"Failed to claim lease for action {action_id}")
+            return False
+            
+        from src.db import insert_audit_log
+        insert_audit_log(actor, "REMEDIATE_STARTED", arn, "SUCCESS", details={"action_id": action_id, "worker_id": worker_id}, request_id=correlation_id)
+        
+        new_status, error_code = self._execute_tag_mutation(tags, arn)
+        
+        updates = {
+            "status": new_status,
+            "last_attempt_at": datetime.now(timezone.utc).isoformat()
+        }
+        if error_code:
+            updates["last_error_code"] = error_code
+            
+        self.state_store.update_remediation_action(action_id, updates, expected_status="IN_PROGRESS")
+        
+        insert_audit_log(actor, "REMEDIATE_FINISHED", arn, new_status, details={"action_id": action_id, "error_code": error_code, "worker_id": worker_id}, request_id=correlation_id)
+        
+        if new_status == "FAILED_RETRYABLE":
+            return False
+        return True

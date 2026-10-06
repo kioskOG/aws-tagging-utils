@@ -21,9 +21,12 @@ def test_openapi_json(client):
     
     # Prove documented routes correspond to actual registered API routes
     registered_routes = set()
+    import re
     for rule in app.url_map.iter_rules():
         if rule.endpoint not in ('static', 'index'):
-            registered_routes.add(rule.rule)
+            # Extract the variable name part from <[converter:]variable_name>
+            route = re.sub(r'<(?:[^>:]*:)?([^>:]+)>', r'{\1}', rule.rule)
+            registered_routes.add(route)
             
     documented_routes = set(data.get('paths', {}).keys())
     

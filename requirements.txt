@@ -4,3 +4,4 @@ flask>=3.0.0
 mcp>=0.1.0
 fastmcp>=0.1.0
 PyYAML
+PyJWT[crypto]>=2.8.0

@@ -85,9 +85,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Evaluate
         val_res = governance_engine.evaluate(tags, resource_id=arn)
         
-        # Process Remediation Workflow
-        rem_res = remediation_engine.process(account_id, region, res_type, arn, tags, val_res)
-        results.append({"arn": arn, "remediation": rem_res})
+        if not val_res.compliant:
+            request_data = {
+                "resource_arn": arn,
+                "requested_tags": val_res.normalized_tags
+            }
+            req_id = getattr(context, "aws_request_id", "unknown") if context else "unknown"
+            rem_res = remediation_engine.process_sync(request_data, actor="eventbridge", request_id=req_id)
+            results.append({"arn": arn, "remediation": rem_res})
+        else:
+            results.append({"arn": arn, "remediation": {"status": "COMPLIANT"}})
         
     return {"statusCode": 200, "body": results}
 

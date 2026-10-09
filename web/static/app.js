@@ -88,12 +88,12 @@ const AWS_REGIONS = [
                 <div class="ms-dropdown">
                     <div class="ms-controls" style="flex-direction: column; gap: 10px;">
                         <input type="text" placeholder="Search regions..." class="region-search-input"
-                               style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 6px 10px; font-size: 0.85rem;"
+                               style="font-size: 0.85rem;"
                                onclick="event.stopPropagation()"
                                oninput="regionPickers['${this.tabKey}'].filterList(this.value)">
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
-                            <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
+                            <button class="btn-ghost" style="flex:1; justify-content:center" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
+                            <button class="btn-ghost" style="flex:1; justify-content:center" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
                         </div>
                     </div>
                     <div class="ms-list">
@@ -297,6 +297,8 @@ const AWS_REGIONS = [
         const tab = btn.dataset.tab;
         state.selectedTab = tab;
         $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+        document.body.classList.remove('nav-open');
+        window.scrollTo({ top: 0 });
 
         // Enterprise views
         const entViews = ['dashboard','compliance','mine','finops','security','enforcement','organization','propagation','changes','schema','cicd'];
@@ -320,15 +322,7 @@ const AWS_REGIONS = [
       btn.onclick = () => {
         const tab = btn.dataset.legacyTab;
         $$('.legacy-nav-btn').forEach(b => {
-          if (b === btn) {
-            b.classList.add('active');
-            b.style.color = 'var(--text)';
-            b.style.borderColor = 'var(--border)';
-          } else {
-            b.classList.remove('active');
-            b.style.color = 'var(--muted)';
-            b.style.borderColor = 'transparent';
-          }
+          b.classList.toggle('active', b === btn);
         });
 
         $$('.config-panel').forEach(p => {
@@ -404,7 +398,7 @@ const AWS_REGIONS = [
         const arnParts = (r.ResourceARN || '').split(':');
         const region = arnParts[3] || 'global';
         const tags = Object.entries(r.Tags || {}).map(([k, v]) => `<span class="status-badge info">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join('');
-        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${escapeHtml(r.Name || '---')}</td><td><span class="status-badge" style="background: rgba(255,255,255,0.05)">${escapeHtml(r.Region || region)}</span></td><td class="arn-cell">${escapeHtml(r.ResourceARN)} <span class="help-icon copy-arn" style="cursor:pointer; background:none" data-arn="${escapeHtml(r.ResourceARN)}">📋</span></td><td>${tags}</td></tr>`;
+        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${escapeHtml(r.Name || '---')}</td><td><span class="status-badge">${escapeHtml(r.Region || region)}</span></td><td class="arn-cell">${escapeHtml(r.ResourceARN)} <span class="help-icon copy-arn" style="cursor:pointer; background:none" data-arn="${escapeHtml(r.ResourceARN)}">📋</span></td><td>${tags}</td></tr>`;
       });
 
       html += `</tbody></table></div>`;
@@ -538,24 +532,24 @@ const AWS_REGIONS = [
         const failedArns = Object.keys(failed);
 
         html += `<div style="margin-bottom: 24px;">
-          <h4 style="margin: 0 0 10px 0; color: #c4b5fd; font-size: 0.95rem;">Region: ${reg}</h4>`;
+          <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; font-weight: 600;">Region: <code>${reg}</code></h4>`;
 
         if (tagged.length) {
-          html += `<div class="card" style="border-color: rgba(16, 185, 129, 0.4); margin-bottom:1rem; padding: 1rem; background: rgba(16, 185, 129, 0.05);">
+          html += `<div class="card" style="border-color: color-mix(in srgb, var(--success) 35%, transparent); margin-bottom:1rem; padding: 1rem; background: var(--success-soft);">
             <div style="color:var(--success); font-weight:700; margin-bottom: 8px;">✓ Automatically Tagged (${tagged.length})</div>
-            <div style="font-family: var(--mono); font-size:0.75rem; color: #cbd5e1; line-height:1.6; word-break: break-all;">
+            <div style="font-family: var(--mono); font-size:0.75rem; color: var(--text-2); line-height:1.6; word-break: break-all;">
               ${tagged.join('<br>')}
             </div>
           </div>`;
         }
 
         if (failedArns.length) {
-          html += `<div class="card" style="border-color: rgba(239, 68, 68, 0.4); padding: 1rem; background: rgba(239, 68, 68, 0.05);">
+          html += `<div class="card" style="border-color: color-mix(in srgb, var(--danger) 35%, transparent); padding: 1rem; background: var(--danger-soft);">
             <div style="color:var(--danger); font-weight:700; margin-bottom: 8px;">⚠ Tagging Failed (${failedArns.length})</div>
             <table style="width: 100%; border: none; background: transparent;">
               ${failedArns.map(a => `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <td style="padding: 8px 0; font-family: var(--mono); font-size: 0.75rem; color: #cbd5e1; word-break: break-all; border: none;">${a}</td>
+                <tr>
+                  <td style="padding: 8px 0; font-family: var(--mono); font-size: 0.75rem; color: var(--text-2); word-break: break-all; border: none;">${a}</td>
                   <td style="padding: 8px 0 8px 12px; font-size: 0.8rem; color: var(--danger); border: none;">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td>
                 </tr>
               `).join('')}
@@ -564,7 +558,7 @@ const AWS_REGIONS = [
         }
 
         if (!tagged.length && !failedArns.length) {
-          html += `<div style="font-size: 0.85rem; color: var(--muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">No untagged resources found or identified.</div>`;
+          html += `<div style="font-size: 0.85rem; color: var(--muted); padding: 12px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border);">No untagged resources found or identified.</div>`;
         }
         html += `</div>`;
       });
@@ -623,19 +617,19 @@ const AWS_REGIONS = [
 
       // The Compliance tab is refreshed from the cache by loadEnterpriseData() after the report.
 
-      const col = score > 80 ? '#34d399' : score > 50 ? '#fbbf24' : '#f87171';
+      const col = score > 80 ? 'var(--success)' : score > 50 ? 'var(--warning)' : 'var(--danger)';
       const circ = 2 * Math.PI * 44;
       const dash = (score / 100) * circ;
       let html = `
         <div class="score-ring">
           <div class="ring-wrap">
-            <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/><circle cx="50" cy="50" r="44" fill="none" stroke="${col}" stroke-width="8" stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/></svg>
+            <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" style="stroke:var(--surface-3)" stroke-width="8"/><circle cx="50" cy="50" r="44" fill="none" style="stroke:${col}" stroke-width="8" stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/></svg>
             <div class="ring-label"><span class="ring-pct" style="color:${col}">${score}%</span><span class="ring-sub">Compliant</span></div>
           </div>
           <div class="score-meta">
             <div style="display:flex; justify-content:space-between; align-items:flex-start">
-              <h3 style="color:${col}; margin:0">Compliance Scorecard</h3>
-              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:8px 16px; font-size:0.8rem; background:linear-gradient(135deg,#a78bfa,#8b5cf6)">Transfer to Batch Fix</button>
+              <h3 style="margin:0">Compliance scorecard</h3>
+              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:7px 14px; font-size:0.82rem">Send to batch fix</button>
             </div>
             <p>${summary.compliant || 0} of ${summary.total_resources || 0} resources fully tagged<br>
                <span style="color:var(--danger)">${summary.non_compliant || 0} resources</span> need attention</p>
@@ -699,7 +693,7 @@ const AWS_REGIONS = [
       const findings = data.findings || [];
       const tagFindings = findings.filter(f => f.kind === 'tags');
       const configFindings = findings.filter(f => f.kind === 'config');
-      let html = `<div class="section-title" style="margin-bottom:1rem">${dryRun ? 'Preview' : 'Result'} — ${escapeHtml(data.rule)} <code style="font-size:0.85rem;color:#a78bfa">${escapeHtml(parent)}</code></div>`;
+      let html = `<div class="section-title" style="margin-bottom:1rem">${dryRun ? 'Preview' : 'Result'} — ${escapeHtml(data.rule)} <code>${escapeHtml(parent)}</code></div>`;
       if (!findings.length) {
         html += `<div class="card" style="color:var(--success)">✓ ${escapeHtml(data.message || 'Every child already carries the parent\'s tags.')}</div>`;
       } else {
@@ -715,7 +709,7 @@ const AWS_REGIONS = [
           <button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escapeHtml(data.change_set_id)}')">Undo</button></div>`;
       }
       if (data.errors && data.errors.length) {
-        html += `<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:#fca5a5">${data.errors.map(escapeHtml).join('<br>')}</div></div>`;
+        html += `<div style="margin-top:1rem;padding:1rem;background:var(--danger-soft);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:var(--danger)">${data.errors.map(escapeHtml).join('<br>')}</div></div>`;
       }
       document.getElementById('result-content').innerHTML = html;
       const n = (data.updated_resources || []).length;
@@ -1498,7 +1492,9 @@ function setRefreshButton(busy) {
     const btn = $('#btn-refresh-compliance');
     if (!btn) return;
     btn.disabled = busy;
-    btn.innerHTML = busy ? '<span class="icon">↻</span> Refreshing...' : '<span class="icon">↻</span> Refresh';
+    btn.innerHTML = `<svg class="ico icon"><use href="#i-refresh"/></svg> ${busy ? 'Refreshing…' : 'Refresh'}`;
+    const bar = $('#compliance-status-bar');
+    if (bar) bar.classList.toggle('is-refreshing', busy);
 }
 
 async function checkRefreshStatus() {
@@ -1641,10 +1637,7 @@ function showModalStatus(sel, msg, type) {
     if (!el) return;
     el.style.display = 'block';
     el.textContent = msg;
-    const good = type === 'success';
-    el.style.background = good ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)';
-    el.style.color = good ? '#34d399' : '#f87171';
-    el.style.border = `1px solid ${good ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`;
+    el.className = `modal-status ${type === 'success' ? 'ok' : 'err'}`;
 }
 
 // ── Exemption modal ──────────────────────────────────────────────────
@@ -2167,3 +2160,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startBtn) startBtn.click();
     loadEnterpriseData();
 });
+
+// ── Shell: theme toggle & mobile navigation ──────────────────────────
+
+(function initShell() {
+    const root = document.documentElement;
+    const themeBtn = document.getElementById('theme-toggle');
+    if (themeBtn) themeBtn.addEventListener('click', () => {
+        const current = root.dataset.theme
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const next = current === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = next;
+        try { localStorage.setItem('atu-theme', next); } catch (e) { /* storage unavailable */ }
+    });
+    const menuBtn = document.getElementById('menu-btn');
+    if (menuBtn) menuBtn.addEventListener('click', () => document.body.classList.add('nav-open'));
+    // Colour the status dot from whatever status text the loaders write.
+    const statusText = document.getElementById('meta-status-text');
+    const statusBar = document.getElementById('compliance-status-bar');
+    if (statusText && statusBar) {
+        const sync = () => statusBar.classList.toggle('is-error', /fail|unavailable|error/i.test(statusText.textContent));
+        new MutationObserver(sync).observe(statusText, { childList: true, characterData: true, subtree: true });
+        sync();
+    }
+    const scrim = document.getElementById('scrim');
+    if (scrim) scrim.addEventListener('click', () => document.body.classList.remove('nav-open'));
+})();

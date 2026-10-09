@@ -4,134 +4,156 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AWS Tagging Dashboard</title>
-  <link rel="stylesheet" href="/static/app.css">
-
+  <title>Tag Governance</title>
+  <script>
+    // Apply the saved theme before first paint so there is no flash.
+    try { var t = localStorage.getItem('atu-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
+  <link rel="stylesheet" href="/static/app.css?v=8">
 </head>
 
 <body>
-  <div class="app-container">
+  <!-- ─── ICON SPRITE ────────────────────────────────────────────────── -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-3.6 3.9-5.5 7.5-5.5s6.7 1.9 7.5 5.5"/></symbol>
+      <symbol id="i-dollar" viewBox="0 0 24 24"><path d="M12 2.5v19"/><path d="M16.5 6.5H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H7"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4.5h11.5l-2 4 2 4H5"/></symbol>
+      <symbol id="i-bars" viewBox="0 0 24 24"><path d="M5 20V11"/><path d="M12 20V4"/><path d="M19 20v-6"/></symbol>
+      <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v4"/><path d="M5 17v-2.5a3.5 3.5 0 0 1 3.5-3.5h7a3.5 3.5 0 0 1 3.5 3.5V17"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/><path d="M12 7.5V12l3 2"/></symbol>
+      <symbol id="i-doc" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2"/><path d="M8.5 8h7"/><path d="M8.5 12h7"/><path d="M8.5 16h4"/></symbol>
+      <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/><path d="M13.5 5l-3 14"/></symbol>
+      <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 11.6V4a1 1 0 0 1 1-1h7.6a1 1 0 0 1 .7.3l8.4 8.4a1 1 0 0 1 0 1.4l-7.6 7.6a1 1 0 0 1-1.4 0L3.3 12.3a1 1 0 0 1-.3-.7z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 3.5V9H15"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6.5h16"/><path d="M4 12h16"/><path d="M4 17.5h16"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v12"/><path d="M7 11l5 5 5-5"/><path d="M4.5 20.5h15"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/></symbol>
+      <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M4 12h16"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="shell">
     <div id="toast-container"></div>
-    <div class="stats-bar" id="stats-bar" style="display:flex">
-      <div class="stat-card">
-        <div class="stat-icon blue">🔍</div>
-        <div class="stat-info">
-          <div class="stat-label">Discovered</div>
-          <div class="stat-value blue" id="stat-discovered">0</div>
-          <div class="stat-sub">last scan</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon green">🏷️</div>
-        <div class="stat-info">
-          <div class="stat-label">Session Tags</div>
-          <div class="stat-value green" id="stat-tagged">0</div>
-          <div class="stat-sub">write operations</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon yellow">⚖️</div>
-        <div class="stat-info">
-          <div class="stat-label">Health Score</div>
-          <div class="stat-value yellow" id="stat-score">0%</div>
-          <div class="stat-sub">compliance</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon purple">🛡️</div>
-        <div class="stat-info">
-          <div class="stat-label">Gov Actions</div>
-          <div class="stat-value purple" id="stat-gov">0</div>
-          <div class="stat-sub">auto-tagged</div>
-        </div>
-      </div>
-    </div>
-        <header>
+
+    <!-- ─── SIDEBAR ─────────────────────────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <h1>AWS Tagging Utils</h1>
-        <p>Enterprise Governance, FinOps &amp; Security</p>
+        <div class="brand-mark"><svg class="ico"><use href="#i-tag"/></svg></div>
+        <div class="brand-text">
+          <h1>AWS Tagging Utils</h1>
+          <p>Tag governance &amp; FinOps</p>
+        </div>
       </div>
-      <div id="identity-badge" class="identity-badge" title="Signed-in identity and roles (from the server)">
-        <span class="identity-user">Loading…</span>
-      </div>
-    </header>
 
+      <nav class="nav" aria-label="Main">
+        <div class="nav-group">
+          <div class="nav-label">Overview</div>
+          <button class="tab-btn active" data-tab="dashboard" id="ent-tab-dashboard"><svg class="ico"><use href="#i-dashboard"/></svg>Dashboard</button>
+          <button class="tab-btn" data-tab="mine" id="ent-tab-mine"><svg class="ico"><use href="#i-user"/></svg>My resources</button>
+          <button class="tab-btn" data-tab="organization" id="ent-tab-organization"><svg class="ico"><use href="#i-bars"/></svg>Leaderboard</button>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Governance</div>
+          <button class="tab-btn" data-tab="compliance" id="ent-tab-compliance"><svg class="ico"><use href="#i-shield"/></svg>Compliance</button>
+          <button class="tab-btn" data-tab="enforcement" id="ent-tab-enforcement"><svg class="ico"><use href="#i-flag"/></svg>Enforcement</button>
+          <button class="tab-btn" data-tab="security" id="ent-tab-security"><svg class="ico"><use href="#i-lock"/></svg>Security</button>
+          <button class="tab-btn" data-tab="propagation" id="ent-tab-propagation"><svg class="ico"><use href="#i-branch"/></svg>Propagation</button>
+          <button class="tab-btn" data-tab="changes" id="ent-tab-changes"><svg class="ico"><use href="#i-history"/></svg>Change sets</button>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Cost</div>
+          <button class="tab-btn" data-tab="finops" id="ent-tab-finops"><svg class="ico"><use href="#i-dollar"/></svg>FinOps</button>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Configuration</div>
+          <button class="tab-btn" data-tab="schema" id="ent-tab-schema"><svg class="ico"><use href="#i-doc"/></svg>Schema</button>
+          <button class="tab-btn" data-tab="cicd" id="ent-tab-cicd"><svg class="ico"><use href="#i-code"/></svg>CI/CD</button>
+          <button class="tab-btn" data-tab="legacy" id="ent-tab-legacy"><svg class="ico"><use href="#i-tag"/></svg>Tag tools</button>
+        </div>
+      </nav>
 
-    <!-- Enterprise Navigation -->
-    <div class="tabs" style="margin-bottom: 2rem; flex-wrap: wrap;">
-      <button class="tab-btn active" data-tab="dashboard" id="ent-tab-dashboard">📈 Dashboard</button>
-      <button class="tab-btn" data-tab="compliance" id="ent-tab-compliance">✅ Compliance</button>
-      <button class="tab-btn" data-tab="mine" id="ent-tab-mine">👤 My Resources</button>
-      <button class="tab-btn" data-tab="finops" id="ent-tab-finops">💰 FinOps</button>
-      <button class="tab-btn" data-tab="security" id="ent-tab-security">🔒 Security</button>
-      <button class="tab-btn" data-tab="enforcement" id="ent-tab-enforcement">⚖️ Enforcement</button>
-      <button class="tab-btn" data-tab="organization" id="ent-tab-organization">🏆 Leaderboard</button>
-      <button class="tab-btn" data-tab="propagation" id="ent-tab-propagation">🔗 Propagation</button>
-      <button class="tab-btn" data-tab="changes" id="ent-tab-changes">↩️ Changes</button>
-      <button class="tab-btn" data-tab="schema" id="ent-tab-schema">📋 Schema</button>
-      <button class="tab-btn" data-tab="cicd" id="ent-tab-cicd">🚀 CI/CD</button>
-      <button class="tab-btn" data-tab="legacy" id="ent-tab-legacy">🛠️ Tag Tools</button>
-    </div>
+      <div class="sidebar-foot">
+        <div id="identity-badge" class="identity-badge" title="Signed-in identity and roles (from the server)">
+          <span class="identity-user">Loading…</span>
+        </div>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
 
-    <div id="compliance-status-bar" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 20px; border-radius: 8px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.05);">
-      <div style="display: flex; flex-direction: column; gap: 4px;">
-        <span id="meta-status-text" style="font-weight: 500; font-size: 0.95rem; color: #cbd5e1;">Loading...</span>
-        <span id="meta-last-updated" style="font-size: 0.8rem; color: var(--muted);">Checking cache status...</span>
-      </div>
-      <div>
-        <button id="btn-refresh-compliance" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem;" onclick="triggerBackgroundRefresh()">
-          <span class="icon">↻</span> Refresh
-        </button>
-      </div>
-    </div>
+    <!-- ─── MAIN ────────────────────────────────────────────────────── -->
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open navigation"><svg class="ico"><use href="#i-menu"/></svg></button>
+        <div id="compliance-status-bar" class="status-strip">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div class="status-text">
+            <span id="meta-status-text">Loading…</span>
+            <span id="meta-last-updated">Checking cache status…</span>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button id="btn-refresh-compliance" class="btn btn-outline btn-sm" onclick="triggerBackgroundRefresh()">
+            <svg class="ico icon"><use href="#i-refresh"/></svg> Refresh
+          </button>
+          <button class="icon-btn" id="theme-toggle" aria-label="Toggle colour theme" title="Toggle colour theme">
+            <svg class="ico ico-sun"><use href="#i-sun"/></svg><svg class="ico ico-moon"><use href="#i-moon"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="content">
 
     <!-- ─── ENTERPRISE VIEWS ──────────────────────────────────────────── -->
 
     <!-- DASHBOARD -->
-    <div id="view-ent-dashboard" class="ent-view">
-      <div class="section-title">📈 EXECUTIVE OVERVIEW</div>
-      <div class="stats-bar" style="flex-wrap: wrap; margin-bottom: 2rem;">
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Overall Compliance</div>
+    <section id="view-ent-dashboard" class="ent-view">
+      <div class="page-head">
+        <div>
+          <h2>Executive overview</h2>
+          <p>Tag compliance, spend attribution and risk across every scanned account.</p>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <div class="stat-card accent-blue"><div class="stat-info">
+          <div class="stat-label">Overall compliance</div>
           <div class="stat-value blue" id="dash-compliance">--%</div>
           <div class="stat-sub">across all accounts</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Total Monthly Spend</div>
-          <div class="stat-value green" id="dash-spend">$--</div>
+        <div class="stat-card accent-green"><div class="stat-info">
+          <div class="stat-label">Monthly spend</div>
+          <div class="stat-value" id="dash-spend">$--</div>
           <div class="stat-sub">AWS Cost Explorer</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Active Violations</div>
+        <div class="stat-card accent-red"><div class="stat-info">
+          <div class="stat-label">Active violations</div>
           <div class="stat-value red" id="dash-violations">--</div>
           <div class="stat-sub">requiring action</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Tag Allocation %</div>
+        <div class="stat-card accent-green"><div class="stat-info">
+          <div class="stat-label">Tag allocation</div>
           <div class="stat-value green" id="dash-allocation">--%</div>
           <div class="stat-sub">estimated attribution</div>
         </div></div>
       </div>
       <div id="dash-failed-regions" class="banner banner-warn" style="display:none;"></div>
-      <div class="card" id="dash-coverage" style="margin-bottom: 1.5rem;">
+
+      <div class="card chart-card mb">
         <div class="chart-head">
           <div>
-            <div class="section-title" style="margin:0;">Inventory coverage</div>
-            <div class="chart-sub" id="dash-coverage-sub">How much of the account the latest scan could see</div>
-          </div>
-          <a class="btn-ghost" href="#schema" onclick="document.getElementById('ent-tab-schema').click(); return false;">Details</a>
-        </div>
-        <div class="coverage-grid" id="dash-coverage-body"><div class="chart-empty">No scan yet.</div></div>
-      </div>
-      <div class="card chart-card" style="margin-bottom: 1.5rem;">
-        <div class="chart-head">
-          <div>
-            <div class="section-title" style="margin:0;">Compliance trend</div>
+            <div class="section-title">Compliance trend</div>
             <div class="chart-sub">Compliance score per completed scan (%)</div>
           </div>
           <button class="btn-ghost" onclick="toggleTrendTable()" id="trend-table-toggle">View as table</button>
@@ -139,7 +161,8 @@
         <div id="dash-trend" class="chart-body"><div class="chart-empty">No scans yet. Run a compliance refresh to start the trend.</div></div>
         <div id="dash-trend-table" style="display:none;"></div>
       </div>
-      <div class="dash-grid-2" style="margin-bottom: 1.5rem;">
+
+      <div class="dash-grid-2 mb">
         <div class="card chart-card">
           <div class="section-title">Top violations</div>
           <div class="chart-sub">Resources affected, by tag and violation type</div>
@@ -151,51 +174,73 @@
           <div id="dash-by-service" class="chart-body"><div class="chart-empty">No resources in the latest scan.</div></div>
         </div>
       </div>
-      <div class="dash-grid-3">
+
+      <div class="dash-grid-3 mb">
         <div class="card">
           <div class="section-title">Resources</div>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Total</span><strong id="dash-total-res">--</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Compliant</span><strong class="status-badge ok" id="dash-comp-res">--</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Non-Compliant</span><strong class="status-badge err" id="dash-noncomp-res">--</strong></div>
-          </div>
+          <dl class="kv">
+            <div><dt>Total</dt><dd id="dash-total-res">--</dd></div>
+            <div><dt>Compliant</dt><dd class="status-badge ok" id="dash-comp-res">--</dd></div>
+            <div><dt>Non-compliant</dt><dd class="status-badge err" id="dash-noncomp-res">--</dd></div>
+          </dl>
         </div>
         <div class="card">
           <div class="section-title">Remediation</div>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Pending</span><strong class="status-badge err" id="dash-pending">--</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Active Exemptions</span><strong class="status-badge info" id="dash-exemptions">--</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Protected Violations</span><strong class="status-badge err" id="dash-protected">--</strong></div>
-          </div>
+          <dl class="kv">
+            <div><dt>Pending</dt><dd class="status-badge err" id="dash-pending">--</dd></div>
+            <div><dt>Active exemptions</dt><dd class="status-badge info" id="dash-exemptions">--</dd></div>
+            <div><dt>Protected violations</dt><dd class="status-badge err" id="dash-protected">--</dd></div>
+          </dl>
         </div>
         <div class="card">
           <div class="section-title">Security</div>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Drift Events</span><strong class="status-badge err" id="dash-drift">--</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Auto-Reverted</span><strong class="status-badge ok" id="dash-reverted">--</strong></div>
-            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Pending Review</span><strong class="status-badge info" id="dash-pending-sec">--</strong></div>
-          </div>
+          <dl class="kv">
+            <div><dt>Drift events</dt><dd class="status-badge err" id="dash-drift">--</dd></div>
+            <div><dt>Auto-reverted</dt><dd class="status-badge ok" id="dash-reverted">--</dd></div>
+            <div><dt>Pending review</dt><dd class="status-badge info" id="dash-pending-sec">--</dd></div>
+          </dl>
         </div>
       </div>
-    </div>
+
+      <div class="card" id="dash-coverage">
+        <div class="chart-head">
+          <div>
+            <div class="section-title">Inventory coverage</div>
+            <div class="chart-sub" id="dash-coverage-sub">How much of the account the latest scan could see</div>
+          </div>
+          <a class="btn-ghost" href="#schema" onclick="document.getElementById('ent-tab-schema').click(); return false;">Details →</a>
+        </div>
+        <div class="coverage-grid" id="dash-coverage-body"><div class="chart-empty">No scan yet.</div></div>
+      </div>
+    </section>
 
     <!-- COMPLIANCE -->
-    <div id="view-ent-compliance" class="ent-view" style="display:none;">
-      <div class="section-title">✅ RESOURCE COMPLIANCE</div>
-      <div style="display: flex; gap: 10px; margin-bottom: 1.25rem; flex-wrap: wrap;">
-        <select id="comp-filter-status" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
-          <option value="">All Statuses</option>
+    <section id="view-ent-compliance" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Resource compliance</h2>
+          <p>Every evaluated resource with its tag violations. Fix one, exempt it, or select many for a bulk fix.</p>
+        </div>
+        <a class="btn btn-outline btn-sm" href="/api/compliance/export.csv"><svg class="ico"><use href="#i-download"/></svg> Export CSV</a>
+      </div>
+      <div class="toolbar">
+        <div class="search-input">
+          <svg class="ico"><use href="#i-search"/></svg>
+          <input type="text" id="comp-filter-text" placeholder="Filter by ARN, account or tag value…" oninput="filterComplianceTable()">
+        </div>
+        <select id="comp-filter-status" onchange="filterComplianceTable()">
+          <option value="">All statuses</option>
           <option value="COMPLIANT">Compliant</option>
-          <option value="NON_COMPLIANT">Non-Compliant</option>
+          <option value="NON_COMPLIANT">Non-compliant</option>
         </select>
-        <select id="comp-filter-service" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
-          <option value="">All Services</option>
+        <select id="comp-filter-service" onchange="filterComplianceTable()">
+          <option value="">All services</option>
         </select>
-        <select id="comp-filter-region" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
-          <option value="">All Regions</option>
+        <select id="comp-filter-region" onchange="filterComplianceTable()">
+          <option value="">All regions</option>
         </select>
-        <select id="comp-filter-issue" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
-          <option value="">Any Issue</option>
+        <select id="comp-filter-issue" onchange="filterComplianceTable()">
+          <option value="">Any issue</option>
           <option value="MISSING_REQUIRED">Missing tag</option>
           <option value="INVALID_VALUE">Invalid value</option>
           <option value="INVALID_FORMAT">Invalid format</option>
@@ -204,8 +249,6 @@
           <option value="NEVER_TAGGED">Never tagged</option>
           <option value="EXEMPT">Exempted</option>
         </select>
-        <input type="text" id="comp-filter-text" placeholder="Filter by ARN, account or tag value..." style="flex: 1; min-width: 200px; font-size: 0.85rem;" oninput="filterComplianceTable()">
-        <a class="btn btn-outline" href="/api/compliance/export.csv" style="padding: 8px 14px; font-size: 0.85rem; text-decoration:none;">⬇ Export CSV</a>
       </div>
       <div class="bulk-bar">
         <div id="comp-result-count" class="chart-sub"></div>
@@ -219,130 +262,149 @@
       <div class="table-container">
         <table>
           <thead><tr>
-            <th style="width:32px"><input type="checkbox" id="comp-select-page" title="Select this page" onclick="selectPage(this.checked)"></th>
+            <th class="col-check"><input type="checkbox" id="comp-select-page" title="Select this page" onclick="selectPage(this.checked)"></th>
             <th>Resource ID</th><th>Account</th><th>Type</th><th>Status</th>
             <th>Tags</th><th>Issues</th><th>Exemption</th><th>Actions</th>
           </tr></thead>
-          <tbody id="compliance-table-body"><tr><td colspan="9" class="empty-state" style="text-align:center; padding: 2rem; color:var(--muted);">Loading compliance data...</td></tr></tbody>
+          <tbody id="compliance-table-body"><tr><td colspan="9" class="td-empty">Loading compliance data…</td></tr></tbody>
         </table>
       </div>
-    </div>
+    </section>
 
     <!-- FINOPS -->
-    <div id="view-ent-finops" class="ent-view" style="display:none;">
-      <div class="section-title">💰 FINOPS &amp; COST ATTRIBUTION</div>
-      <div class="card" style="margin-bottom: 1.5rem; border-left: 3px solid var(--warning);">
-        <p style="margin: 0; font-size: 0.88rem; color: var(--muted);">
-          ⚠️ <strong>Attribution Transparency:</strong>
-          <em>Actual AWS Tagged Spend</em> is reported directly from AWS Cost Explorer.
-          <em>Potentially Unallocated Spend</em> is estimated — some AWS services don't provide resource-level cost attribution.
+    <section id="view-ent-finops" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>FinOps &amp; cost attribution</h2>
+          <p>How much of this month's spend can be attributed through tags.</p>
+        </div>
+      </div>
+      <div class="callout">
+        <svg class="ico"><use href="#i-alert"/></svg>
+        <p>
+          <strong>Attribution transparency.</strong>
+          <em>AWS-reported tagged spend</em> comes directly from Cost Explorer.
+          <em>Potentially unallocated spend</em> is an estimate, because some AWS services don't provide resource-level cost attribution.
           Cost Explorer data may be up to 24 hours delayed.
         </p>
       </div>
-      <div class="stats-bar" style="flex-wrap: wrap; margin-bottom: 2rem;">
+      <div class="kpi-grid">
         <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Total Spend</div>
+          <div class="stat-label">Total spend</div>
           <div class="stat-value" id="finops-total">$--</div>
           <div class="stat-sub">current month</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">AWS-Reported Tagged</div>
+        <div class="stat-card accent-green"><div class="stat-info">
+          <div class="stat-label">AWS-reported tagged</div>
           <div class="stat-value green" id="finops-tagged">$--</div>
           <div class="stat-sub">actual Cost Explorer data</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Untagged Spend</div>
+        <div class="stat-card accent-red"><div class="stat-info">
+          <div class="stat-label">Untagged spend</div>
           <div class="stat-value red" id="finops-untagged">$--</div>
           <div class="stat-sub">attribution gap</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Potentially Unallocated</div>
+        <div class="stat-card accent-yellow"><div class="stat-info">
+          <div class="stat-label">Potentially unallocated</div>
           <div class="stat-value yellow" id="finops-unallocated">$--</div>
           <div class="stat-sub">allocation estimate</div>
         </div></div>
       </div>
       <div class="card">
-        <div class="section-title">Cost Allocation Tags (Activated)</div>
-        <div id="finops-tags-list" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+        <div class="section-title">Activated cost allocation tags</div>
+        <div id="finops-tags-list" class="chip-row" style="margin:0;"></div>
       </div>
-    </div>
+    </section>
 
     <!-- SECURITY -->
-    <div id="view-ent-security" class="ent-view" style="display:none;">
-      <div class="section-title">🔒 SECURITY &amp; PROTECTED-TAG DRIFT</div>
-      <div class="stats-bar" style="flex-wrap: wrap; margin-bottom: 2rem;">
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Protected Violations</div>
+    <section id="view-ent-security" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Security &amp; protected-tag drift</h2>
+          <p>Changes to protected tags, who made them, and whether they were reverted.</p>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <div class="stat-card accent-red"><div class="stat-info">
+          <div class="stat-label">Protected violations</div>
           <div class="stat-value red" id="sec-protected">--</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Unauthorized Changes</div>
+        <div class="stat-card accent-red"><div class="stat-info">
+          <div class="stat-label">Unauthorized changes</div>
           <div class="stat-value red" id="sec-unauth">--</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Auto-Reverted</div>
+        <div class="stat-card accent-green"><div class="stat-info">
+          <div class="stat-label">Auto-reverted</div>
           <div class="stat-value green" id="sec-reverted">--</div>
         </div></div>
-        <div class="stat-card"><div class="stat-info">
-          <div class="stat-label">Pending Review</div>
+        <div class="stat-card accent-yellow"><div class="stat-info">
+          <div class="stat-label">Pending review</div>
           <div class="stat-value yellow" id="sec-pending">--</div>
         </div></div>
       </div>
-      <div class="section-title" style="margin-top: 1.5rem;">Recent Drift Events</div>
+      <h3 class="block-title">Recent drift events</h3>
       <div class="table-container">
         <table>
           <thead><tr>
             <th>Resource</th><th>Tag</th><th>Expected</th><th>Actual</th>
-            <th>Changed By</th><th>Changed At</th><th>Status</th><th>Actions</th>
+            <th>Changed by</th><th>Changed at</th><th>Status</th><th>Actions</th>
           </tr></thead>
-          <tbody id="drift-table-body"><tr><td colspan="8" style="text-align:center; padding: 2rem; color:var(--muted);">Loading drift events...</td></tr></tbody>
+          <tbody id="drift-table-body"><tr><td colspan="8" class="td-empty">Loading drift events…</td></tr></tbody>
         </table>
       </div>
-    </div>
+    </section>
 
     <!-- ENFORCEMENT / REMEDIATION / AUDIT -->
-    <div id="view-ent-enforcement" class="ent-view" style="display:none;">
-      <div class="section-title">⚖️ REMEDIATION TASKS</div>
-      <div class="table-container" style="margin-bottom: 2rem;">
+    <section id="view-ent-enforcement" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Enforcement</h2>
+          <p>Open remediation tasks, active exemptions and the full audit trail.</p>
+        </div>
+      </div>
+      <h3 class="block-title">Remediation tasks</h3>
+      <div class="table-container mb-lg">
         <table>
-          <thead><tr><th>Resource</th><th>Account</th><th>Violation</th><th>Detected</th><th>Deadline</th><th>Status</th><th>Last Action</th></tr></thead>
-          <tbody id="remediation-table-body"><tr><td colspan="7" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading...</td></tr></tbody>
+          <thead><tr><th>Resource</th><th>Account</th><th>Violation</th><th>Detected</th><th>Deadline</th><th>Status</th><th>Last action</th></tr></thead>
+          <tbody id="remediation-table-body"><tr><td colspan="7" class="td-empty">Loading…</td></tr></tbody>
         </table>
       </div>
-      <div class="section-title">ACTIVE EXEMPTIONS</div>
-      <div class="table-container" style="margin-bottom: 2rem;">
+      <h3 class="block-title">Active exemptions</h3>
+      <div class="table-container mb-lg">
         <table>
           <thead><tr><th>Scope</th><th>Reason</th><th>Owner</th><th>Expiration</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody id="exemptions-table-body"><tr><td colspan="6" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading...</td></tr></tbody>
+          <tbody id="exemptions-table-body"><tr><td colspan="6" class="td-empty">Loading…</td></tr></tbody>
         </table>
       </div>
-      <div class="section-title">AUDIT LOG</div>
+      <h3 class="block-title">Audit log</h3>
       <div class="table-container">
         <table>
           <thead><tr><th>Timestamp</th><th>Action</th><th>Resource</th><th>Actor</th><th>Result</th><th>Reason</th></tr></thead>
-          <tbody id="audit-table-body"><tr><td colspan="6" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading...</td></tr></tbody>
+          <tbody id="audit-table-body"><tr><td colspan="6" class="td-empty">Loading…</td></tr></tbody>
         </table>
       </div>
-    </div>
+    </section>
 
     <!-- MY RESOURCES -->
-    <div id="view-ent-mine" class="ent-view" style="display:none;">
-      <div class="section-title">👤 MY RESOURCES</div>
-      <div class="bulk-bar">
-        <div class="chart-sub" id="mine-identity">Resources whose Owner tag matches you.</div>
+    <section id="view-ent-mine" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>My resources</h2>
+          <p id="mine-identity">Resources whose Owner tag matches you.</p>
+        </div>
         <div class="bulk-actions" id="mine-admin" style="display:none;">
-          <input type="text" id="mine-owner" placeholder="View as owner (admins)…" style="font-size:0.85rem; width:240px;">
-          <button class="btn-ghost" onclick="loadMine()">View</button>
+          <input type="text" id="mine-owner" placeholder="View as owner (admins)…" class="input-sm" style="width:240px;">
+          <button class="btn btn-outline btn-sm" onclick="loadMine()">View</button>
         </div>
       </div>
-      <div class="stats-bar" style="margin-bottom: 1.5rem;">
+      <div class="kpi-grid">
         <div class="stat-card"><div class="stat-info"><div class="stat-label">My resources</div><div class="stat-value" id="mine-total">--</div><div class="stat-sub" id="mine-pct">compliant</div></div></div>
-        <div class="stat-card"><div class="stat-info"><div class="stat-label">Need attention</div><div class="stat-value red" id="mine-noncomp">--</div><div class="stat-sub">non-compliant</div></div></div>
-        <div class="stat-card"><div class="stat-info"><div class="stat-label">Exemptions expiring</div><div class="stat-value yellow" id="mine-expiring">--</div><div class="stat-sub" id="mine-expiring-sub">soon</div></div></div>
-        <div class="stat-card"><div class="stat-info"><div class="stat-label">Unallocated share</div><div class="stat-value yellow" id="mine-unalloc">--</div><div class="stat-sub" id="mine-cost-sub">of my month-to-date spend</div></div></div>
+        <div class="stat-card accent-red"><div class="stat-info"><div class="stat-label">Need attention</div><div class="stat-value red" id="mine-noncomp">--</div><div class="stat-sub">non-compliant</div></div></div>
+        <div class="stat-card accent-yellow"><div class="stat-info"><div class="stat-label">Exemptions expiring</div><div class="stat-value yellow" id="mine-expiring">--</div><div class="stat-sub" id="mine-expiring-sub">soon</div></div></div>
+        <div class="stat-card accent-yellow"><div class="stat-info"><div class="stat-label">Unallocated share</div><div class="stat-value yellow" id="mine-unalloc">--</div><div class="stat-sub" id="mine-cost-sub">of my month-to-date spend</div></div></div>
       </div>
       <div id="mine-cost-note" class="banner banner-warn" style="display:none;"></div>
-      <div class="dash-grid-2" style="margin-bottom: 1.5rem;">
+      <div class="dash-grid-2 mb">
         <div class="card chart-card"><div class="section-title">My top violations</div><div id="mine-violations" class="chart-body"></div></div>
         <div class="card"><div class="section-title">Exemptions expiring soon</div><div id="mine-exemptions"></div></div>
       </div>
@@ -352,44 +414,51 @@
       </div>
       <div class="table-container">
         <table><thead><tr><th>Resource</th><th>Type</th><th>Status</th><th>Tags</th><th>Issues</th></tr></thead>
-        <tbody id="mine-table-body"><tr><td colspan="5" style="text-align:center; padding: 2rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+        <tbody id="mine-table-body"><tr><td colspan="5" class="td-empty">Loading…</td></tr></tbody></table>
       </div>
-    </div>
+    </section>
 
     <!-- LEADERBOARD (organization) -->
-    <div id="view-ent-organization" class="ent-view" style="display:none;">
-      <div class="section-title">🏆 COMPLIANCE LEADERBOARD</div>
-      <div class="bulk-bar">
+    <section id="view-ent-organization" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Compliance leaderboard</h2>
+          <p id="lb-compared"></p>
+        </div>
         <div class="segmented" id="lb-dimension">
           <button data-dim="team" class="active">Team</button>
           <button data-dim="account">Account</button>
           <button data-dim="ou">OU</button>
           <button data-dim="service">Service</button>
         </div>
-        <div class="chart-sub" id="lb-compared"></div>
       </div>
       <div id="lb-improved" class="chip-row"></div>
-      <div class="table-container" style="margin-bottom: 2rem;">
+      <div class="table-container mb-lg">
         <table><thead><tr><th style="width:48px">#</th><th>Name</th><th style="width:38%">Compliance</th><th>Week over week</th><th>Resources</th><th>Non-compliant</th></tr></thead>
-        <tbody id="lb-table-body"><tr><td colspan="6" style="text-align:center; padding: 2rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+        <tbody id="lb-table-body"><tr><td colspan="6" class="td-empty">Loading…</td></tr></tbody></table>
       </div>
       <div class="bulk-bar">
-        <div class="section-title" style="margin:0;">ACCOUNTS SCANNED</div>
-        <button class="btn-ghost" data-perm="manage_exemptions" onclick="refreshOrgDirectory()">Refresh names & OUs</button>
+        <h3 class="block-title" style="margin:0;">Accounts scanned</h3>
+        <button class="btn-ghost" data-perm="manage_exemptions" onclick="refreshOrgDirectory()">Refresh names &amp; OUs</button>
       </div>
       <div class="table-container">
         <table><thead><tr><th>Account</th><th>OU</th><th>Compliance %</th><th>Resources</th><th>Scan errors</th></tr></thead>
-        <tbody id="org-table-body"><tr><td colspan="5" style="text-align:center; padding: 2rem; color:var(--muted);">Loading...</td></tr></tbody></table>
+        <tbody id="org-table-body"><tr><td colspan="5" class="td-empty">Loading…</td></tr></tbody></table>
       </div>
-    </div>
+    </section>
 
     <!-- PROPAGATION -->
-    <div id="view-ent-propagation" class="ent-view" style="display:none;">
-      <div class="section-title">🔗 TAG PROPAGATION</div>
-      <p class="chart-sub" style="margin-top:0">Children that don't carry their parent's tags — the usual reason "we tagged it but the cost is still untagged". Name and aws:* tags are never propagated.</p>
-      <div class="card" style="margin-bottom: 1.5rem;">
+    <section id="view-ent-propagation" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Tag propagation</h2>
+          <p>Children that don't carry their parent's tags, the usual reason for "we tagged it but the cost is still untagged". Name and aws:* tags are never propagated.</p>
+        </div>
+      </div>
+      <div class="card mb">
+        <div class="section-title">Rules to check</div>
         <div id="prop-rules" class="rule-grid"></div>
-        <div class="bulk-bar" style="margin: 1rem 0 0;">
+        <div class="card-foot">
           <div class="chart-sub" id="prop-status">No check run yet.</div>
           <button class="btn btn-primary bulk-primary" id="btn-prop-run" onclick="runPropagation()">Run check</button>
         </div>
@@ -397,11 +466,11 @@
       <div id="prop-summary" class="chip-row"></div>
       <div class="bulk-bar">
         <div class="bulk-actions">
-          <select id="prop-filter-rule" onchange="renderPropagation()" style="width:auto;font-size:0.85rem"><option value="">All rules</option></select>
-          <select id="prop-filter-kind" onchange="renderPropagation()" style="width:auto;font-size:0.85rem">
-            <option value="">Tags & config</option><option value="tags">Missing/mismatched tags</option><option value="config">Propagation switched off</option>
+          <select id="prop-filter-rule" onchange="renderPropagation()" class="select-sm"><option value="">All rules</option></select>
+          <select id="prop-filter-kind" onchange="renderPropagation()" class="select-sm">
+            <option value="">Tags &amp; config</option><option value="tags">Missing/mismatched tags</option><option value="config">Propagation switched off</option>
           </select>
-          <label class="chart-sub" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="prop-overwrite"> Overwrite mismatched values</label>
+          <label class="inline-check"><input type="checkbox" id="prop-overwrite"> Overwrite mismatched values</label>
         </div>
         <div class="bulk-actions">
           <span class="chart-sub" id="prop-selected">0 selected</span>
@@ -410,71 +479,92 @@
         </div>
       </div>
       <div class="table-container">
-        <table><thead><tr><th style="width:32px"></th><th>Rule</th><th>Parent</th><th>Child / setting</th><th>Missing</th><th>Mismatched</th></tr></thead>
-        <tbody id="prop-table-body"><tr><td colspan="6" style="text-align:center; padding: 2rem; color:var(--muted);">Run a check to see findings.</td></tr></tbody></table>
+        <table><thead><tr><th class="col-check"></th><th>Rule</th><th>Parent</th><th>Child / setting</th><th>Missing</th><th>Mismatched</th></tr></thead>
+        <tbody id="prop-table-body"><tr><td colspan="6" class="td-empty">Run a check to see findings.</td></tr></tbody></table>
       </div>
-    </div>
+    </section>
 
     <!-- CHANGES (change sets) -->
-    <div id="view-ent-changes" class="ent-view" style="display:none;">
-      <div class="section-title">↩️ CHANGE SETS</div>
-      <p class="chart-sub" style="margin-top:0">Every bulk fix and propagation fix is recorded here and can be undone. Undo skips keys someone changed since.</p>
+    <section id="view-ent-changes" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Change sets</h2>
+          <p>Every bulk fix and propagation fix is recorded here and can be undone. Undo skips keys someone changed since.</p>
+        </div>
+      </div>
       <div class="table-container">
         <table><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Description</th><th>Result</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody id="changes-table-body"><tr><td colspan="7" style="text-align:center; padding: 2rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+        <tbody id="changes-table-body"><tr><td colspan="7" class="td-empty">Loading…</td></tr></tbody></table>
       </div>
-    </div>
+    </section>
 
     <!-- SCHEMA -->
-    <div id="view-ent-schema" class="ent-view" style="display:none;">
-      <div class="section-title">📋 GOVERNANCE SCHEMA (from tag-schema.yaml)</div>
-      <p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem;">
-        This schema is the single source of truth from the backend <code>SchemaProvider</code>. Changes require updating the YAML configuration.
-      </p>
-      <div class="table-container">
+    <section id="view-ent-schema" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Governance schema</h2>
+          <p>Loaded from <code>tag-schema.yaml</code> by the backend <code>SchemaProvider</code>, the single source of truth. Changes require updating the YAML configuration.</p>
+        </div>
+      </div>
+      <div class="table-container mb-lg">
         <table>
-          <thead><tr><th>Tag</th><th>Required</th><th>Protected</th><th>FinOps</th><th>Allowed Values</th><th>Regex</th><th>Description</th></tr></thead>
-          <tbody id="schema-table-body"><tr><td colspan="7" style="text-align:center; padding: 2rem; color:var(--muted);">Loading schema...</td></tr></tbody>
+          <thead><tr><th>Tag</th><th>Required</th><th>Protected</th><th>FinOps</th><th>Allowed values</th><th>Regex</th><th>Description</th></tr></thead>
+          <tbody id="schema-table-body"><tr><td colspan="7" class="td-empty">Loading schema…</td></tr></tbody>
         </table>
       </div>
-      <div class="section-title" style="margin-top: 2rem;">🔭 DISCOVERED BUT NOT EVALUATED</div>
-      <p class="chart-sub" id="coverage-hint" style="margin-top:0"></p>
+      <h3 class="block-title">Discovered but not evaluated</h3>
+      <p class="chart-sub" id="coverage-hint" style="margin:-4px 0 12px"></p>
       <div class="table-container">
         <table><thead><tr><th>Resource type</th><th>Resources found</th></tr></thead>
-        <tbody id="coverage-table-body"><tr><td colspan="2" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+        <tbody id="coverage-table-body"><tr><td colspan="2" class="td-empty">Loading…</td></tr></tbody></table>
       </div>
-    </div>
+    </section>
 
     <!-- CI/CD -->
-    <div id="view-ent-cicd" class="ent-view" style="display:none;">
-      <div class="section-title">🚀 CI/CD PIPELINE VALIDATION (SARIF)</div>
-      <p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem;">
-        Validation results are generated by the CLI: <code>aws-tagging-utils validate terraform --format sarif</code>
-      </p>
+    <section id="view-ent-cicd" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>CI/CD pipeline validation</h2>
+          <p>SARIF results produced by the CLI: <code>aws-tagging-utils validate terraform --format sarif</code></p>
+        </div>
+      </div>
       <div class="table-container">
         <table>
           <thead><tr><th>Repository</th><th>Branch</th><th>Commit</th><th>Status</th><th>Violations</th><th>Actions</th></tr></thead>
-          <tbody id="cicd-table-body"><tr><td colspan="6" style="text-align:center; padding: 2rem; color:var(--muted);">Loading CI/CD runs...</td></tr></tbody>
+          <tbody id="cicd-table-body"><tr><td colspan="6" class="td-empty">Loading CI/CD runs…</td></tr></tbody>
         </table>
       </div>
-    </div>
+    </section>
 
-    <!-- LEGACY TAG TOOLS (existing sidebar+main grid) -->
-    <div id="view-ent-legacy" class="ent-view" style="display:none;">
+    <!-- TAG TOOLS -->
+    <section id="view-ent-legacy" class="ent-view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2>Tag tools</h2>
+          <p>Hands-on discovery, batch tagging, auto-tagging, audits and propagation against live AWS APIs.</p>
+        </div>
+      </div>
+
+      <div class="session-strip" id="stats-bar" style="display:flex">
+        <div class="session-stat"><span class="session-label">Discovered</span><span class="session-value" id="stat-discovered">0</span><span class="session-sub">last scan</span></div>
+        <div class="session-stat"><span class="session-label">Session tags</span><span class="session-value" id="stat-tagged">0</span><span class="session-sub">write operations</span></div>
+        <div class="session-stat"><span class="session-label">Health score</span><span class="session-value" id="stat-score">0%</span><span class="session-sub">compliance</span></div>
+        <div class="session-stat"><span class="session-label">Gov actions</span><span class="session-value" id="stat-gov">0</span><span class="session-sub">auto-tagged</span></div>
+      </div>
+
+      <nav class="legacy-nav" aria-label="Tag tools">
+        <button class="legacy-nav-btn active" data-legacy-tab="read"><span class="step">1</span>Discovery</button>
+        <button class="legacy-nav-btn" data-legacy-tab="write"><span class="step">2</span>Batch tagging</button>
+        <button class="legacy-nav-btn" data-legacy-tab="gov"><span class="step">3</span>Auto-tagging</button>
+        <button class="legacy-nav-btn" data-legacy-tab="report"><span class="step">4</span>Compliance audit</button>
+        <button class="legacy-nav-btn" data-legacy-tab="sync"><span class="step">5</span>Tag propagator</button>
+      </nav>
+
     <div class="main-grid">
-      <!-- Sidebar / Config -->
       <aside>
-        <nav class="legacy-nav" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 2rem;">
-          <button class="legacy-nav-btn active" data-legacy-tab="read" style="text-align: left; padding: 10px; background: transparent; border: 1px solid var(--border); color: var(--text); cursor: pointer; border-radius: 6px;">1. Query / Discovery</button>
-          <button class="legacy-nav-btn" data-legacy-tab="write" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">2. Batch Tagging</button>
-          <button class="legacy-nav-btn" data-legacy-tab="gov" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">3. Auto-Tagging</button>
-          <button class="legacy-nav-btn" data-legacy-tab="report" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">4. Compliance Audit</button>
-          <button class="legacy-nav-btn" data-legacy-tab="sync" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">5. Tag Propagator</button>
-        </nav>
-
         <!-- Read Panel Config -->
         <div id="config-read" class="card config-panel active">
-          <div class="section-title">Query Parameters</div>
+          <div class="section-title">Query parameters</div>
 
           <div class="field">
             <label>Regions</label>
@@ -482,133 +572,117 @@
           </div>
 
           <div class="field">
-            <label>Service Selection</label>
+            <label>Services</label>
             <div class="type-search-container">
-              <input id="type-search" type="text" placeholder="Filter services..." />
+              <input id="type-search" type="text" placeholder="Filter services…" />
             </div>
-            <div class="type-list" id="type-list">
-              <!-- Dynamically populated -->
-            </div>
-            <div style="display: flex; gap: 8px; margin-top: 10px;">
-              <button class="btn-ghost" id="types-all">Select Visible</button>
-              <button class="btn-ghost" id="types-clear">Clear All</button>
+            <div class="type-list" id="type-list"></div>
+            <div class="row-gap">
+              <button class="btn-ghost" id="types-all">Select visible</button>
+              <button class="btn-ghost" id="types-clear">Clear all</button>
             </div>
           </div>
 
-          <div class="field" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+          <div class="field inset">
             <label class="checkbox-container">
               <input type="checkbox" id="read-missing-tag-enable" />
-              <span style="color: var(--text);">Audit for Missing Tag</span>
+              <span>Audit for a missing tag</span>
             </label>
             <div id="missing-tag-group" style="display: none; margin-top: 12px;">
               <input id="read-missing-tag-key" type="text" placeholder="e.g. Owner" />
-              <p style="font-size: 0.75rem; color: var(--muted); margin: 6px 0 0;">Find resources where this key is
-                blank or missing.</p>
+              <p class="hint">Find resources where this key is blank or missing.</p>
             </div>
           </div>
 
           <div class="field">
-            <label>Tag Filtering (AND)</label>
+            <label>Tag filters (AND)</label>
             <div id="read-filters"></div>
-            <button class="btn-ghost" id="add-read-filter">+ Add Filter Rule</button>
+            <button class="btn-ghost" id="add-read-filter">+ Add filter rule</button>
           </div>
 
-          <button class="btn btn-primary" id="btn-read" style="width: 100%; height: 50px; font-size: 1rem;">
-            Run Discovery Scan
-          </button>
+          <button class="btn btn-primary btn-block" id="btn-read">Run discovery scan</button>
         </div>
 
         <!-- Write Panel Config -->
         <div id="config-write" class="card config-panel" style="display: none;">
-          <div class="section-title">Tag Operations</div>
+          <div class="section-title">Tag operations</div>
 
           <div class="field">
-            <label>Target Regions</label>
+            <label>Target regions</label>
             <div id="write-region-picker"></div>
           </div>
           <div class="field">
-            <div style="display:flex; justify-content:space-between; align-items:center"><label
-                for="write-arns">Resource Inventory (ARNs)</label><button class="btn-ghost"
-                onclick="document.getElementById('write-arns').value=''; toast('Inventory cleared', 'info')"
-                style="font-size:0.7rem">Clear</button></div>
-            <textarea id="write-arns" placeholder="Paste ARNs here (one per line)..."></textarea>
-            <p style="font-size: 0.75rem; color: var(--muted); margin-top: 6px;">Supports mixed resource types in one
-              batch.</p>
+            <div class="label-row"><label for="write-arns">Resource ARNs</label><button class="btn-ghost btn-xs"
+                onclick="document.getElementById('write-arns').value=''; toast('Inventory cleared', 'info')">Clear</button></div>
+            <textarea id="write-arns" placeholder="Paste ARNs here, one per line…"></textarea>
+            <p class="hint">Mixed resource types are fine in one batch.</p>
           </div>
 
           <div class="field">
-            <label>Overwrite / New Tags</label>
+            <label>New or overwritten tags</label>
             <div id="write-tags"></div>
-            <button class="btn-ghost" id="add-write-tag">+ Add Tag Metadata</button>
+            <button class="btn-ghost" id="add-write-tag">+ Add tag</button>
           </div>
 
-          <button class="btn btn-success" id="btn-write" style="width: 100%; height: 50px; font-size: 1rem;">
-            Commit Batch Changes
-          </button>
+          <button class="btn btn-success btn-block" id="btn-write">Commit batch changes</button>
         </div>
 
         <!-- Gov Panel Config -->
         <div id="config-gov" class="card config-panel" style="display: none;">
-          <div class="section-title">Compliance & Auto-Tagging</div>
+          <div class="section-title">Compliance &amp; auto-tagging</div>
 
           <div class="field">
-            <label>Target Regions</label>
+            <label>Target regions</label>
             <div id="gov-region-picker"></div>
           </div>
 
           <div class="field">
-            <label>Resource Types (Optional Filter)</label>
+            <label>Resource types (optional filter)</label>
             <div class="type-search-container">
-              <input type="text" id="gov-type-search" placeholder="Search resource types... (e.g. EC2)" />
+              <input type="text" id="gov-type-search" placeholder="Search resource types… (e.g. EC2)" />
             </div>
             <div class="type-list" id="gov-type-list"></div>
           </div>
 
-          <div class="field">
-            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
-              This will scan the selected regions for untagged resources and attempt to identify their owners via
-              CloudTrail history to apply the <b>Owner</b> tag automatically.
-            </p>
-          </div>
+          <p class="field inset hint" style="margin-top:0">
+            Scans the selected regions for untagged resources, identifies their creators from CloudTrail history and
+            applies the <b>Owner</b> tag automatically.
+          </p>
 
-          <button class="btn btn-gov-style" id="btn-gov" style="width: 100%; height: 50px; font-size: 1rem;">
-            Run Auto-Tagging Scan
-          </button>
+          <button class="btn btn-gov-style btn-block" id="btn-gov">Run auto-tagging scan</button>
         </div>
+
         <!-- Report Panel Config -->
         <div id="config-report" class="card config-panel" style="display: none;">
-          <div class="section-title">Compliance Audit</div>
+          <div class="section-title">Compliance audit</div>
           <div class="field">
-            <label>Audit Regions</label>
+            <label>Audit regions</label>
             <div id="report-region-picker"></div>
           </div>
           <div class="field">
-            <label for="report-mandatory">Mandatory Tag Keys</label>
+            <label for="report-mandatory">Mandatory tag keys</label>
             <input id="report-mandatory" type="text" placeholder="Owner, Environment, CostCenter"
               value="Owner,Environment,CostCenter">
           </div>
           <div class="field">
-            <label for="report-bucket">S3 Export Bucket (Optional)</label>
+            <label for="report-bucket">S3 export bucket (optional)</label>
             <input id="report-bucket" type="text" placeholder="my-compliance-reports-bucket">
           </div>
-          <button class="btn btn-primary" id="btn-report"
-            style="width: 100%; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#f59e0b,#ef4444);">
-            Generate Compliance Report
-          </button>
+          <button class="btn btn-primary btn-block" id="btn-report">Generate compliance report</button>
         </div>
 
         <!-- Sync Panel Config -->
         <div id="config-sync" class="card config-panel" style="display: none;">
-          <div class="section-title">Tag Propagation</div>
+          <div class="section-title">Tag propagation</div>
           <div class="field">
-            <label>Target Region</label>
+            <label>Target region</label>
             <div id="sync-region-picker"></div>
           </div>
           <div class="field">
             <label for="sync-rule">Parent type</label>
             <select id="sync-rule">
               <option value="vpc">VPC → subnets, SGs, route tables, gateways, NACLs, endpoints</option>
-              <option value="ec2_instance">EC2 instance → EBS volumes & network interfaces</option>
+              <option value="ec2_instance">EC2 instance → EBS volumes &amp; network interfaces</option>
               <option value="ebs_volume">EBS volume → snapshots</option>
               <option value="asg">Auto Scaling group → instances (+ PropagateAtLaunch)</option>
               <option value="ecs_service">ECS service → tasks (+ propagateTags)</option>
@@ -623,147 +697,120 @@
             <label for="sync-vpc-id">Parent ID, name or ARN</label>
             <input id="sync-vpc-id" type="text" placeholder="vpc-0a1b2c3d4e5f67890 / my-asg / my-stack">
           </div>
-          <div class="field" style="display:flex; gap:8px; align-items:center;">
-            <input type="checkbox" id="sync-overwrite" style="width:auto"> <label for="sync-overwrite" style="margin:0">Overwrite child values that differ</label>
+          <div class="field">
+            <label class="checkbox-container"><input type="checkbox" id="sync-overwrite"><span>Overwrite child values that differ</span></label>
           </div>
-          <div class="field"
-            style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; font-size: 0.85rem; color: var(--muted);">
+          <p class="field inset hint">
             Copies the parent's governance tags to its children. <b>Name</b> and <b>aws:*</b> tags are never copied.
-            Preview first; applied changes can be undone from the Changes tab.
-          </div>
-          <div style="display:flex; gap:10px;">
-            <button class="btn btn-outline" id="btn-sync-preview" style="flex:1; height: 50px;">Preview</button>
-            <button class="btn btn-primary" id="btn-sync"
-              style="flex:1; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#8b5cf6,#d946ef);">
-              Propagate
-            </button>
+            Preview first; applied changes can be undone from Change sets.
+          </p>
+          <div class="row-gap">
+            <button class="btn btn-outline btn-block" id="btn-sync-preview">Preview</button>
+            <button class="btn btn-primary btn-block" id="btn-sync">Propagate</button>
           </div>
         </div>
       </aside>
 
       <!-- Results Area -->
-      <main>
-        <div id="results-view" class="card" style="min-height: 500px;">
+      <div>
+        <div id="results-view" class="card results-card">
           <div class="result-header">
-            <div class="section-title" id="results-title" style="margin-bottom: 0;">Operational View</div>
-            <div id="result-actions" style="display: none; gap: 8px;">
-              <input type="text" id="table-filter" placeholder="Filter results..."
-                style="width: 200px; padding: 0.5rem; font-size: 0.8rem; height: 36px; margin: 0;">
-              <button class="btn btn-outline" id="btn-export-csv"
-                style="padding: 0 12px; height: 36px; font-size: 0.8rem;">Export CSV</button>
-              <button class="btn btn-outline" id="btn-transfer"
-                style="background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); color: #a78bfa;">
-                Transfer to Batch Writer →
-              </button>
+            <div class="section-title" id="results-title">Results</div>
+            <div id="result-actions" style="display: none;">
+              <div class="result-actions-inner">
+                <input type="text" id="table-filter" class="input-sm" placeholder="Filter results…" style="width: 200px;">
+                <button class="btn btn-outline btn-sm" id="btn-export-csv">Export CSV</button>
+                <button class="btn btn-outline btn-sm" id="btn-transfer">Send to batch writer →</button>
+              </div>
             </div>
           </div>
 
           <div id="result-content">
             <div class="empty-state">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"
-                stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
-              <p>Configure your criteria in the sidebar to scan for AWS resources.</p>
+              <svg class="ico"><use href="#i-scan"/></svg>
+              <p>Configure your criteria on the left, then run a scan to see AWS resources here.</p>
             </div>
           </div>
 
           <div id="json-output-container">
-            <label style="display: block; margin-bottom: 10px; font-size: 0.8rem; color: var(--warning);">DEBUG: API Raw
-              Data</label>
-            <pre id="output" style="background: #000; color: #0f0; border: 1px solid #333;"></pre>
+            <label class="debug-label">Raw API response</label>
+            <pre id="output"></pre>
           </div>
-          <button class="btn-ghost" id="toggle-json" style="margin-top: 1.5rem; display: none;">Toggle Developer JSON
-            View</button>
+          <button class="btn-ghost" id="toggle-json" style="margin-top: 1.25rem; display: none;">Toggle raw JSON</button>
         </div>
-      </main>
+      </div>
     </div>
-    </div>
-    </div>
+    </section>
     <!-- ─── END ENTERPRISE VIEWS ──────────────────────────────────────────── -->
 
+      </div><!-- /.content -->
+    </div><!-- /.main -->
+  </div><!-- /.shell -->
+
     <!-- ─── FIX TAGS MODAL ──────────────────────────────────────────────── -->
-    <div id="fix-tags-modal" style="
-        display:none; position:fixed; inset:0;
-        background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
-        z-index:9999; align-items:center; justify-content:center;
-    ">
-      <div style="
-          background:var(--card-bg); border:1px solid rgba(255,255,255,0.08);
-          border-radius:16px; padding:2rem; width:min(640px,92vw);
-          max-height:85vh; overflow-y:auto; box-shadow:0 24px 64px rgba(0,0,0,0.6);
-      ">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
-          <h2 style="margin:0;font-size:1.2rem;">🏷️ Fix Tags</h2>
-          <button class="btn-ghost" onclick="closeFixTagsModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+    <div id="fix-tags-modal" class="modal-backdrop" style="display:none;">
+      <div class="modal-panel" style="width:min(640px,92vw);" role="dialog" aria-labelledby="fix-tags-title">
+        <div class="modal-head">
+          <h2 id="fix-tags-title">Fix tags</h2>
+          <button class="icon-btn" onclick="closeFixTagsModal()" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
         </div>
 
-        <div style="margin-bottom:1.25rem;">
-          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Resource ARN</div>
-          <code id="fix-tags-arn" style="font-size:0.78rem;color:var(--accent);word-break:break-all;"></code>
+        <div class="modal-meta">
+          <div><div class="meta-label">Resource ARN</div><code id="fix-tags-arn" class="break"></code></div>
+          <div><div class="meta-label">Region</div><code id="fix-tags-region"></code></div>
         </div>
 
-        <div style="margin-bottom:1.25rem;">
-          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Region</div>
-          <code id="fix-tags-region" style="font-size:0.85rem;color:#a78bfa;"></code>
-        </div>
+        <p class="modal-copy">Set a value for each tag that is missing or invalid. Other tags on the resource are not changed.</p>
 
-        <div style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;">
-          Set a value for each tag that is missing or invalid. Other tags on the resource are not changed.
-        </div>
+        <div id="fix-tags-fields" class="stack"></div>
 
-        <div id="fix-tags-fields" style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;"></div>
+        <div id="fix-tags-status" class="modal-status" style="display:none;"></div>
 
-        <div id="fix-tags-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin-bottom:1rem;"></div>
-
-        <div style="display:flex;gap:12px;justify-content:flex-end;">
-          <button class="btn" onclick="closeFixTagsModal()" style="background:rgba(255,255,255,0.06);">Cancel</button>
-          <button id="fix-tags-submit" class="btn btn-primary" onclick="fixTagsConfirm()">Apply Tags</button>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeFixTagsModal()">Cancel</button>
+          <button id="fix-tags-submit" class="btn btn-primary" onclick="fixTagsConfirm()">Apply tags</button>
         </div>
       </div>
     </div>
 
-  </div>
-
     <!-- ─── EXEMPTION MODAL ─────────────────────────────────────────────── -->
     <div id="exempt-modal" class="modal-backdrop" style="display:none;">
-      <div class="modal-panel">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
-          <h2 style="margin:0;font-size:1.2rem;">🛡️ Exempt Resource</h2>
-          <button class="btn-ghost" onclick="closeExemptModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+      <div class="modal-panel" role="dialog" aria-labelledby="exempt-title">
+        <div class="modal-head">
+          <h2 id="exempt-title">Exempt resource</h2>
+          <button class="icon-btn" onclick="closeExemptModal()" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
         </div>
-        <div style="margin-bottom:1.25rem;">
-          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Resource ARN</div>
-          <code id="exempt-arn" style="font-size:0.78rem;color:var(--accent);word-break:break-all;"></code>
+        <div class="modal-meta">
+          <div><div class="meta-label">Resource ARN</div><code id="exempt-arn" class="break"></code></div>
         </div>
-        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">Reason <span style="color:var(--danger)">*</span></label>
-        <textarea id="exempt-reason" rows="3" maxlength="1000" placeholder="Why is this resource exempt? Link a ticket if possible." style="width:100%;margin-bottom:1rem;"></textarea>
-        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">Expires on <span style="color:var(--danger)">*</span></label>
-        <input id="exempt-expiry" type="date" style="width:100%;margin-bottom:1.25rem;">
-        <div id="exempt-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin-bottom:1rem;"></div>
-        <div style="display:flex;gap:12px;justify-content:flex-end;">
-          <button class="btn" onclick="closeExemptModal()" style="background:rgba(255,255,255,0.06);">Cancel</button>
-          <button id="exempt-submit" class="btn btn-primary" onclick="exemptConfirm()">Create Exemption</button>
+        <div class="field">
+          <label for="exempt-reason">Reason <span class="req">*</span></label>
+          <textarea id="exempt-reason" rows="3" maxlength="1000" placeholder="Why is this resource exempt? Link a ticket if possible." style="min-height:96px"></textarea>
+        </div>
+        <div class="field">
+          <label for="exempt-expiry">Expires on <span class="req">*</span></label>
+          <input id="exempt-expiry" type="date">
+        </div>
+        <div id="exempt-status" class="modal-status" style="display:none;"></div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeExemptModal()">Cancel</button>
+          <button id="exempt-submit" class="btn btn-primary" onclick="exemptConfirm()">Create exemption</button>
         </div>
       </div>
     </div>
 
     <!-- ─── CHANGE PREVIEW MODAL (bulk fix / propagation) ───────────────── -->
     <div id="change-modal" class="modal-backdrop" style="display:none;">
-      <div class="modal-panel modal-wide">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-          <h2 style="margin:0;font-size:1.2rem;" id="change-title">Bulk fix</h2>
-          <button class="btn-ghost" onclick="closeChangeModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+      <div class="modal-panel modal-wide" role="dialog" aria-labelledby="change-title">
+        <div class="modal-head">
+          <h2 id="change-title">Bulk fix</h2>
+          <button class="icon-btn" onclick="closeChangeModal()" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
         </div>
         <div id="change-form"></div>
-        <div id="change-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin:1rem 0;"></div>
+        <div id="change-status" class="modal-status" style="display:none;"></div>
         <div id="change-preview"></div>
-        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:1rem;">
-          <button class="btn" onclick="closeChangeModal()" style="background:rgba(255,255,255,0.06);">Close</button>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeChangeModal()">Close</button>
           <button id="change-preview-btn" class="btn btn-outline">Preview</button>
           <button id="change-apply-btn" class="btn btn-primary" disabled>Apply</button>
         </div>
@@ -772,7 +819,7 @@
 
     <div id="chart-tooltip" class="chart-tooltip" role="tooltip" style="display:none;"></div>
 
-  <script src="/static/app.js?v=7"></script>
+  <script src="/static/app.js?v=8"></script>
 
 </body>
 

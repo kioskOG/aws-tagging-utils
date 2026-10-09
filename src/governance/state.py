@@ -50,6 +50,10 @@ class GovernanceStateStore(ABC):
     def update_remediation_action(self, action_id: str, updates: Dict[str, Any], expected_status: Optional[str] = None) -> bool:
         pass
 
+    def list_remediation_actions(self, limit: int = 100) -> list[Dict[str, Any]]:
+        """Most recent remediation actions first. Stores may override."""
+        return []
+
 
 class DynamoDBStateStore(GovernanceStateStore):
     def __init__(self, table_name: str = GOVERNANCE_DYNAMODB_TABLE, region: str = DEFAULT_REGION):
@@ -138,6 +142,26 @@ class DynamoDBStateStore(GovernanceStateStore):
             table.delete_item(Key={"PK": f"EXEMPTION#{exemption_id}"})
         except Exception as e:
             logger.error("Failed to delete exemption from DynamoDB: %s", e)
+            from src.errors import map_boto_error, APIError
+            status, code, msg = map_boto_error(e)
+            raise APIError(msg, status_code=status, error_code=code)
+
+    def list_remediation_actions(self, limit: int = 100) -> list[Dict[str, Any]]:
+        try:
+            from boto3.dynamodb.conditions import Attr
+            table = self._get_client()
+            items: list[Dict[str, Any]] = []
+            kwargs: Dict[str, Any] = {"FilterExpression": Attr("PK").begins_with("ACTION#")}
+            while True:
+                response = table.scan(**kwargs)
+                items.extend(response.get("Items", []))
+                if "LastEvaluatedKey" not in response:
+                    break
+                kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+            items.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True)
+            return items[:limit]
+        except Exception as e:
+            logger.error("Failed to list remediation actions: %s", e)
             from src.errors import map_boto_error, APIError
             status, code, msg = map_boto_error(e)
             raise APIError(msg, status_code=status, error_code=code)
@@ -290,6 +314,11 @@ class MemoryStateStore(GovernanceStateStore):
         key = f"EXEMPTION#{exemption_id}"
         if key in self.store:
             del self.store[key]
+
+    def list_remediation_actions(self, limit: int = 100) -> list[Dict[str, Any]]:
+        items = [v for k, v in self.store.items() if k.startswith("ACTION#")]
+        items.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True)
+        return items[:limit]
 
     def get_remediation_action(self, action_id: str) -> Optional[Dict[str, Any]]:
         return self.store.get(f"ACTION#{action_id}")

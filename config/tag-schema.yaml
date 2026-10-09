@@ -1,4 +1,8 @@
 tags:
+  Name:
+    description: "Human-readable resource name (shown in the AWS console)"
+    required: false
+
   Owner:
     description: "The team or individual who owns the resource"
     required: true

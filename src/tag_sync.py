@@ -108,6 +108,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return {"statusCode": 400, "body": {"message": "vpc_id is required for sync_vpc action"}}
             
             result = sync_vpc_tags(region, vpc_id)
+            if result.get("error"):
+                status = 404 if "not found" in result["error"].lower() else 502
+                return {"statusCode": status, "body": {"message": result["error"]}}
             return {"statusCode": 200, "body": result}
         
         else:

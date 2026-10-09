@@ -102,6 +102,8 @@ def process_message(msg_envelope: dict[str, Any], engine: RemediationEngine) -> 
             # We don't delete unsupported jobs; they might be for a newer worker version
             success = False
 
+        from src.observability.metrics import record_worker_message
+        record_worker_message(job_type, "success" if success else "failed")
         if success:
             logger.info(
                 "Handler succeeded",
@@ -122,6 +124,8 @@ def process_message(msg_envelope: dict[str, Any], engine: RemediationEngine) -> 
             )
         return success
     except Exception as e:
+        from src.observability.metrics import record_worker_message
+        record_worker_message(job_type, "error")
         logger.error(
             f"Handler failed with exception: {e}",
             exc_info=True,

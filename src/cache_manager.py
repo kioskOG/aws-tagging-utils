@@ -161,6 +161,17 @@ def clear_refresh_error() -> None:
     _last_refresh_error = None
 
 
+def resolve_scan_regions() -> list[str]:
+    """Regions for scheduled/background scans, from COMPLIANCE_REGIONS (comma list or 'all')."""
+    from src.config import COMPLIANCE_REGIONS, DEFAULT_REGION
+    raw = COMPLIANCE_REGIONS.strip()
+    if raw.lower() == "all":
+        from src.tag_report import get_all_regions
+        return get_all_regions()
+    regs = [r.strip() for r in raw.split(",") if r.strip()]
+    return regs or [DEFAULT_REGION]
+
+
 def background_refresh(regions: list[str] | None = None,
                        mandatory_tags: list[str] | None = None) -> None:
     """
@@ -181,15 +192,22 @@ def background_refresh(regions: list[str] | None = None,
 
     try:
         # Import lazily to avoid circular imports at module load time
-        from src.config import DEFAULT_REGION, MANDATORY_TAGS
+        from src.config import MANDATORY_TAGS
         from src.tag_report import generate_report
 
-        regs = regions or [DEFAULT_REGION]
+        regs = regions or resolve_scan_regions()
         tags = mandatory_tags or MANDATORY_TAGS
 
         log.info("background_refresh: scanning regions=%s tags=%s", regs, tags)
         report = generate_report(regs, tags)
+        region_errors = {r: d.get("error") for r, d in report.get("regions", {}).items() if d.get("error")}
+        if region_errors and len(region_errors) == len(regs):
+            # Every region failed (bad credentials, no network...). Keep the last good scan.
+            first = next(iter(region_errors.values()))
+            raise RuntimeError(f"All regions failed to scan: {first}")
         save_report(report)
+        if region_errors:
+            _last_refresh_error = "Partial scan, failed regions: " + ", ".join(sorted(region_errors))
         log.info("background_refresh: saved %d resources.",
                  report.get("summary", {}).get("total_resources", 0))
     except Exception as exc:

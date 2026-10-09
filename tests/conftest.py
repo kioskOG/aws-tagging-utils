@@ -2,6 +2,19 @@ import pytest
 import threading
 
 @pytest.fixture(autouse=True, scope="function")
+def fake_aws_credentials(request, monkeypatch):
+    """Unit tests must never reach a real AWS account with the developer's credentials."""
+    if request.node.get_closest_marker("integration"):
+        return
+    for var in ("AWS_PROFILE", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.setenv("AWS_CONFIG_FILE", "/dev/null")
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", "/dev/null")
+
+
+@pytest.fixture(autouse=True, scope="function")
 def global_isolate_db(tmp_path, monkeypatch):
     """
     Ensure every test automatically uses a fresh, isolated SQLite database.

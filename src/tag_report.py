@@ -1,57 +1,12 @@
 import json
+import time
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
 from botocore.exceptions import BotoCoreError, ClientError
 import boto3
 
-# Try to import from tag_read to reuse RESOURCE_TYPE_MAP
-try:
-    from tag_read import RESOURCE_TYPE_MAP
-except ImportError:
-    try:
-        from src.tag_read import RESOURCE_TYPE_MAP
-    except ImportError:
-        # Fallback if module is completely undiscoverable
-        RESOURCE_TYPE_MAP = {
-            "Elasticache": "elasticache:cluster",
-            "RDS": "rds:db",
-            "RDSCluster": "rds:cluster",
-            "DynamoDB": "dynamodb:table",
-            "Elasticsearch": "es",
-            "ELB": "elasticloadbalancing:loadbalancer",
-            "S3": "s3:bucket",
-            "EC2Instance": "ec2:instance",
-            "EBSVolume": "ec2:volume",
-            "EBSSnapshot": "ec2:snapshot",
-            "VPC": "ec2:vpc",
-            "Subnet": "ec2:subnet",
-            "SecurityGroup": "ec2:security-group",
-            "InternetGateway": "ec2:internet-gateway",
-            "NatGateway": "ec2:natgateway",
-            "RouteTable": "ec2:route-table",
-            "NetworkInterface": "ec2:network-interface",
-            "Lambda": "lambda:function",
-            "ECSCluster": "ecs:cluster",
-            "ECSService": "ecs:service",
-            "ECR": "ecr:repository",
-            "EKS": "eks:cluster",
-            "SNS": "sns:topic",
-            "SQS": "sqs:queue",
-            "Redshift": "redshift:cluster",
-            "KinesisStream": "kinesis:stream",
-            "KMS": "kms:key",
-            "LogGroup": "logs:log-group",
-            "ApiGateway": "apigateway:restapis",
-            "Athena": "athena:workgroup",
-            "Glue": "glue:job",
-            "EMR": "elasticmapreduce:cluster",
-            "StepFunction": "states:stateMachine",
-            "CloudFormation": "cloudformation:stack",
-            "EventBridge": "events:rule",
-            "SageMaker": "sagemaker:notebook-instance",
-        }
-
+from src.tag_read import RESOURCE_TYPE_MAP
 from src.clients import get_ec2_client, get_s3_client, get_tagging_client
 from src.config import (
     DEFAULT_REGION, 
@@ -65,6 +20,7 @@ from src.logging_config import get_logger
 from src.governance.engine import TagGovernanceEngine
 from src.governance.schema_provider import FileSchemaProvider
 from src.multi_account import CrossAccountManager
+from src.observability.metrics import record_compliance_report, record_scan_outcome
 
 logger = get_logger(__name__)
 
@@ -98,6 +54,14 @@ def get_all_regions():
         return [DEFAULT_REGION]
 
 def generate_report(target_regions: List[str], mandatory_tags: List[str], resource_types: List[str] = None) -> Dict[str, Any]:
+    """
+    Scan resources via the Resource Groups Tagging API and evaluate each one against
+    the tag schema plus `mandatory_tags`.
+
+    Note: GetResources only returns resources that are tagged or were tagged at some
+    point; resources that never had any tag are not visible to this API.
+    """
+    started = time.perf_counter()
     report = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "mandatory_tags": mandatory_tags,
@@ -133,13 +97,16 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str], resour
                     arn = item.get("ResourceARN", "")
                     tags = {t["Key"]: t["Value"] for t in item.get("Tags", [])}
                     
-                    validation_result = governance_engine.evaluate(tags, resource_id=arn)
+                    validation_result = governance_engine.evaluate(
+                        tags, resource_id=arn, extra_required=mandatory_tags
+                    )
                     is_compliant = validation_result.compliant
                     
                     res_info = {
                         "ResourceARN": arn,
                         "IsCompliant": is_compliant,
                         "Violations": [v.to_dict() for v in validation_result.violations],
+                        "Warnings": [w.to_dict() for w in validation_result.warnings],
                         "Tags": tags,
                         "NormalizedTags": validation_result.normalized_tags
                     }
@@ -166,7 +133,16 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str], resour
 
     if report["summary"]["total_resources"] > 0:
         report["summary"]["compliance_score"] = round((report["summary"]["compliant"] / report["summary"]["total_resources"]) * 100, 2)
-        
+
+    failed_regions = [r for r, d in report["regions"].items() if d.get("error")]
+    report["summary"]["failed_regions"] = failed_regions
+    duration = time.perf_counter() - started
+    report["summary"]["duration_seconds"] = round(duration, 2)
+    if failed_regions and len(failed_regions) == len(target_regions):
+        record_scan_outcome("failed", failed_regions)
+    else:
+        record_scan_outcome("partial" if failed_regions else "success", failed_regions)
+        record_compliance_report(report, duration)
     return report
 
 def generate_organization_report(regions: List[str], mandatory_tags: List[str] = MANDATORY_TAGS, resource_types: List[str] = None):

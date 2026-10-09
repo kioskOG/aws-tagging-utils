@@ -48,6 +48,21 @@ def test_unknown_tag(engine):
     assert result.compliant is False
     assert any(v.type == "UNKNOWN_TAG" and v.tag == "ExtraTag" for v in result.violations)
 
+def test_unknown_tag_warn_mode_stays_compliant(engine):
+    # e.g. a VPC with the console "Name" tag must not fail compliance in warn mode
+    tags = {"Owner": "team-a", "CostCenter": "123456", "Environment": "dev", "Name": "netbird-dev"}
+    result = engine.evaluate(tags)
+    assert result.compliant is True
+    assert result.violations == []
+    assert any(w.type == "UNKNOWN_TAG" and w.tag == "Name" for w in result.warnings)
+
+def test_aws_reserved_tags_never_unknown():
+    strict_engine = TagGovernanceEngine(MockSchemaProvider(), unknown_tags_behavior="reject", enable_normalization=True)
+    tags = {"Owner": "team-a", "CostCenter": "123456", "Environment": "dev", "aws:cloudformation:stack-name": "s"}
+    result = strict_engine.evaluate(tags)
+    assert result.compliant is True
+    assert result.warnings == []
+
 def test_normalization_alias(engine):
     tags = {"Owner": "team-a", "costcenter": "123456", "env": "prod"} 
     result = engine.evaluate(tags)

@@ -8,6 +8,17 @@ from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
+def parse_expiry(value: Any) -> Optional[datetime]:
+    """Parse an ISO-8601 date/datetime; values without a timezone are treated as UTC."""
+    if value in (None, ""):
+        return None
+    dt = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class ExemptionManager:
     def __init__(self, state_store: GovernanceStateStore):
         self.state_store = state_store
@@ -51,6 +62,19 @@ class ExemptionManager:
         from src.errors import APIError
         if not self.is_valid_scope(exemption_data):
             raise APIError("Unsupported exemption scope combination.", status_code=400, error_code="INVALID_EXEMPTION_SCOPE")
+        exemption_data = dict(exemption_data)
+        if "reason" in exemption_data:
+            reason = str(exemption_data.get("reason") or "").strip()
+            if len(reason) > 1000:
+                raise APIError("Reason must be at most 1000 characters.", status_code=400, error_code="INVALID_REQUEST")
+            exemption_data["reason"] = reason
+        if exemption_data.get("expires_at"):
+            try:
+                expiry = parse_expiry(exemption_data["expires_at"])
+            except ValueError:
+                raise APIError("expires_at must be an ISO-8601 date or datetime.", status_code=400, error_code="INVALID_REQUEST")
+            # Normalized to an explicit UTC offset so expiry checks never compare naive/aware datetimes
+            exemption_data["expires_at"] = expiry.isoformat()
             
         rank = self._get_scope_rank(exemption_data)
         
@@ -96,11 +120,13 @@ class ExemptionManager:
         all_ex = self.state_store.list_exemptions()
         return [ex for ex in all_ex if self._is_active(ex)]
 
-    def is_exempt(self, account_id: str, resource_type: str, resource_id: str, environment: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def is_exempt(self, account_id: str, resource_type: str, resource_id: str, environment: Optional[str] = None,
+                  active: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
         """
         Evaluate all active exemptions against the resource deterministic precedence rules.
+        Pass `active` (from list_active_exemptions) to evaluate many resources with one lookup.
         """
-        active_exemptions = self.list_active_exemptions()
+        active_exemptions = active if active is not None else self.list_active_exemptions()
         
         matching_exemptions = []
         for ex in active_exemptions:
@@ -137,11 +163,14 @@ class ExemptionManager:
         expires_at = exemption.get("expires_at")
         if expires_at:
             try:
-                exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-                if datetime.now(timezone.utc) > exp_dt:
-                    return False
-            except Exception:
-                pass
+                exp_dt = parse_expiry(expires_at)
+            except ValueError:
+                # Unparseable expiry: fail closed rather than exempting forever
+                logger.warning("Exemption %s has invalid expires_at %r; treating as expired",
+                               exemption.get("id"), expires_at)
+                return False
+            if exp_dt and datetime.now(timezone.utc) > exp_dt:
+                return False
         return True
         
     def _matches(self, exemption: Dict[str, Any], account_id: str, resource_type: str, resource_id: str, environment: Optional[str]) -> bool:

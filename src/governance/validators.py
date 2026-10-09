@@ -71,6 +71,9 @@ class Validator:
             return violations
 
         for key in tags:
+            # aws:* tags are reserved and managed by AWS (e.g. aws:cloudformation:stack-name)
+            if key.lower().startswith("aws:"):
+                continue
             if key not in schema:
                 violations.append(ValidationViolation(
                     tag=key,

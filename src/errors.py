@@ -8,11 +8,12 @@ import re
 logger = logging.getLogger(__name__)
 
 class APIError(Exception):
-    def __init__(self, message: str, status_code: int = 500, error_code: str = "INTERNAL_ERROR"):
+    def __init__(self, message: str, status_code: int = 500, error_code: str = "INTERNAL_ERROR", details=None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
         self.error_code = error_code
+        self.details = details
 
 def map_boto_error(e: Exception) -> tuple[int, str, str]:
     """Maps boto3 exceptions to (status_code, error_code, safe_message)"""
@@ -22,14 +23,17 @@ def map_boto_error(e: Exception) -> tuple[int, str, str]:
             return 403, "ACCESS_DENIED", "AWS access denied. Please check your permissions."
         if code in ("Throttling", "ThrottlingException", "TooManyRequestsException"):
             return 429, "THROTTLED", "AWS API rate limit exceeded. Please try again later."
-        if code in ("UnrecognizedClientException", "InvalidClientTokenId", "InvalidAccessKeyId", "AuthFailure"):
-            return 401, "INVALID_CREDENTIALS", "AWS credentials are invalid or missing."
+        # The *server's* AWS credentials are bad: that's a 503 (service unavailable), not a 401,
+        # which would tell browsers/ALBs the end user must re-authenticate.
+        if code in ("UnrecognizedClientException", "InvalidClientTokenId", "InvalidAccessKeyId", "AuthFailure",
+                    "ExpiredToken", "ExpiredTokenException"):
+            return 503, "INVALID_CREDENTIALS", "AWS credentials are invalid or missing."
         return 502, "AWS_SERVICE_ERROR", "AWS service returned an error."
         
     if isinstance(e, BotoCoreError):
         name = e.__class__.__name__
         if "Credential" in name:
-            return 401, "INVALID_CREDENTIALS", "AWS credentials are invalid or missing."
+            return 503, "INVALID_CREDENTIALS", "AWS credentials are invalid or missing."
         return 502, "AWS_SDK_ERROR", "An internal AWS SDK error occurred."
         
     return 500, "INTERNAL_ERROR", "An unexpected internal error occurred."
@@ -79,11 +83,14 @@ def register_error_handlers(app):
 
     @app.errorhandler(APIError)
     def handle_api_error(e):
-        return jsonify({
+        body = {
             "error_code": e.error_code,
             "message": e.message,
             "request_id": getattr(g, 'request_id', 'unknown')
-        }), e.status_code
+        }
+        if e.details is not None:
+            body["details"] = e.details
+        return jsonify(body), e.status_code
 
     @app.errorhandler(ClientError)
     @app.errorhandler(BotoCoreError)

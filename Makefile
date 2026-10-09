@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format typecheck test test-cov test-all build run clean
+.PHONY: help install dev lint format typecheck test test-cov test-all build run run-web run-prod run-worker clean
 
 PYTHON ?= python3
 PIP    ?= pip
@@ -41,6 +41,12 @@ run: ## Run MCP server locally
 
 run-web: ## Run Flask web UI locally
 	$(PYTHON) -m flask --app web.app run --host 127.0.0.1 --port 5050 --debug
+
+run-prod: ## Run the web app with gunicorn (production server)
+	gunicorn --workers 1 --threads 8 --timeout 120 --bind 127.0.0.1:5050 --access-logfile - web.app:app
+
+run-worker: ## Run the SQS remediation worker
+	$(PYTHON) -m src.worker
 
 clean: ## Remove build artifacts and caches
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

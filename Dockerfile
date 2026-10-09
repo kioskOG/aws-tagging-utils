@@ -6,8 +6,7 @@ WORKDIR /app
 # Install build dependencies
 COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir PyYAML
+    && pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY src/ src/
@@ -52,5 +51,8 @@ EXPOSE 5050
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)" || exit 1
 
-# Default: run Flask Web API (production mode, no debug, bound to all interfaces)
-CMD ["python", "-m", "flask", "--app", "web.app", "run", "--host=0.0.0.0", "--port=5050", "--no-debugger", "--no-reload"]
+# Default: production WSGI server.
+# One worker on purpose: the compliance refresh lock, caches and scheduler are
+# process-local, so concurrency comes from threads. Override GUNICORN_THREADS if needed.
+ENV GUNICORN_THREADS="8"
+CMD ["sh", "-c", "exec gunicorn --workers 1 --threads ${GUNICORN_THREADS} --timeout 120 --graceful-timeout 30 --bind 0.0.0.0:5050 --access-logfile - web.app:app"]

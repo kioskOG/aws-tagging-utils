@@ -2,6 +2,7 @@ import json
 from typing import Dict, Any
 
 from src.config import (
+    GOVERNANCE_REMEDIATION_ENABLED,
     GOVERNANCE_SCHEMA_PATH, 
     GOVERNANCE_UNKNOWN_TAGS, 
     GOVERNANCE_NORMALIZATION
@@ -85,7 +86,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Evaluate
         val_res = governance_engine.evaluate(tags, resource_id=arn)
         
-        if not val_res.compliant:
+        if not val_res.compliant and not GOVERNANCE_REMEDIATION_ENABLED:
+            # Report-only mode: record the violation but don't mutate the resource
+            results.append({"arn": arn, "remediation": {"status": "REPORT_ONLY",
+                            "violations": [v.to_dict() for v in val_res.violations]}})
+        elif not val_res.compliant:
             request_data = {
                 "resource_arn": arn,
                 "requested_tags": val_res.normalized_tags

@@ -45,15 +45,21 @@ class ValidationResult:
     compliant: bool = True
     resource: Optional[str] = None
     violations: List[ValidationViolation] = field(default_factory=list)
+    # Informational findings (e.g. UNKNOWN_TAG in "warn" mode) that do not affect compliance
+    warnings: List[ValidationViolation] = field(default_factory=list)
     normalized_tags: Dict[str, str] = field(default_factory=dict)
-    
+
     def add_violation(self, violation: ValidationViolation):
         self.compliant = False
         self.violations.append(violation)
+
+    def add_warning(self, warning: ValidationViolation):
+        self.warnings.append(warning)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "compliant": self.compliant,
             "resource": self.resource,
             "violations": [v.to_dict() for v in self.violations],
+            "warnings": [w.to_dict() for w in self.warnings],
         }

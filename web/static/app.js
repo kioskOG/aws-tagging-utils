@@ -10,7 +10,50 @@ const AWS_REGIONS = [
       { id: 'sa-east-1', name: 'São Paulo' }
     ];
 
+    // One identity lookup shared by the whole page (default region, roles, permissions)
+    window.mePromise = fetch('/api/me')
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null);
+
+    // POST JSON and normalise the result; errors carry the server message and details.
+    async function apiPost(url, payload) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) { data = { message: `HTTP ${res.status}` }; }
+      return { ok: res.ok, status: res.status, data };
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // Render an API error into the results pane and toast it
+    function renderApiError(title, data) {
+      const details = data.details || data.violations || [];
+      let html = `<div class="section-title">${escapeHtml(title)}</div>
+        <div class="card" style="border-color: var(--danger);">
+          <div style="color:var(--danger); font-weight:700">⚠ ${escapeHtml(data.message || 'Request failed')}</div>`;
+      if (Array.isArray(details) && details.length) {
+        html += `<table style="margin-top:12px; font-size:0.8rem; text-align:left;">
+          <thead><tr><th>Tag</th><th>Violation</th><th>Expected</th><th>Actual</th></tr></thead><tbody>
+          ${details.map(v => `<tr><td style="color:var(--danger)">${escapeHtml(v.tag)}</td><td>${escapeHtml(v.type)}</td>
+            <td>${escapeHtml(v.expected || '')}</td><td>${escapeHtml(v.actual || '')}</td></tr>`).join('')}
+          </tbody></table>`;
+      }
+      if (data.request_id) html += `<div class="chart-sub" style="margin-top:10px">Request ID: ${escapeHtml(data.request_id)}</div>`;
+      html += `</div>`;
+      $('#result-content').innerHTML = html;
+      $('#output').textContent = JSON.stringify(data, null, 2);
+      $('#toggle-json').style.display = 'block';
+      toast(data.message || 'Request failed', 'error');
+    }
+
     const state = {
+      defaultRegion: 'us-east-1',
       resourceMap: {},
       lastResults: [],
       selectedTab: 'read',
@@ -22,7 +65,7 @@ const AWS_REGIONS = [
       constructor(containerId, tabKey, defaultAll = false) {
         this.container = document.getElementById(containerId);
         this.tabKey = tabKey;
-        this.selected = defaultAll ? AWS_REGIONS.map(r => r.id) : ['us-east-2'];
+        this.selected = defaultAll ? AWS_REGIONS.map(r => r.id) : [state.defaultRegion];
         this.searchTerm = '';
         this.render();
       }
@@ -148,6 +191,8 @@ const AWS_REGIONS = [
     // Initial Load
     async function loadMeta() {
       try {
+        const me = await window.mePromise;
+        if (me && me.default_region) state.defaultRegion = me.default_region;
         const r = await fetch("/api/meta/resource-types");
         const data = await r.json();
         state.resourceMap = data.map || {};
@@ -263,6 +308,10 @@ const AWS_REGIONS = [
         // Legacy tag-tools panel
         const legacyView = document.getElementById('view-ent-legacy');
         if (legacyView) legacyView.style.display = (tab === 'legacy') ? 'block' : 'none';
+
+        // Deep link: /#compliance etc. (replaceState: no history entry per click)
+        if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
+        if (tab === 'dashboard' && typeof renderTrend === 'function' && typeof ent !== 'undefined') renderTrend(ent.history);
       };
     });
 
@@ -317,13 +366,9 @@ const AWS_REGIONS = [
       }
 
       try {
-        const res = await fetch("/api/read", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        renderResults(data);
+        const { ok, data } = await apiPost("/api/read", payload);
+        if (!ok) renderApiError('Discovery failed', data);
+        else renderResults(data);
       } catch (e) {
         alert("Discovery failed: " + e.message);
       } finally {
@@ -357,12 +402,15 @@ const AWS_REGIONS = [
       resources.forEach((r, idx) => {
         const arnParts = (r.ResourceARN || '').split(':');
         const region = arnParts[3] || 'global';
-        const tags = Object.entries(r.Tags || {}).map(([k, v]) => `<span class="status-badge info">${k}: ${v}</span>`).join('');
-        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${r.Name || '---'}</td><td><span class="status-badge" style="background: rgba(255,255,255,0.05)">${region}</span></td><td class="arn-cell">${r.ResourceARN} <span class="help-icon" style="cursor:pointer; background:none" onclick="navigator.clipboard.writeText('${r.ResourceARN}'); toast('ARN Copied', 'success')">📋</span></td><td>${tags}</td></tr>`;
+        const tags = Object.entries(r.Tags || {}).map(([k, v]) => `<span class="status-badge info">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join('');
+        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${escapeHtml(r.Name || '---')}</td><td><span class="status-badge" style="background: rgba(255,255,255,0.05)">${escapeHtml(r.Region || region)}</span></td><td class="arn-cell">${escapeHtml(r.ResourceARN)} <span class="help-icon copy-arn" style="cursor:pointer; background:none" data-arn="${escapeHtml(r.ResourceARN)}">📋</span></td><td>${tags}</td></tr>`;
       });
 
       html += `</tbody></table></div>`;
       container.innerHTML = html;
+      container.querySelectorAll('.copy-arn').forEach(el => el.onclick = () => {
+        navigator.clipboard.writeText(el.dataset.arn); toast('ARN Copied', 'success');
+      });
 
       $('#select-all-results').onclick = (e) => {
         $$('.result-check').forEach(c => c.checked = e.target.checked);
@@ -406,13 +454,9 @@ const AWS_REGIONS = [
       };
 
       try {
-        const res = await fetch("/api/write", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        renderWriteResults(data, res.ok);
+        const { ok, data } = await apiPost("/api/write", payload);
+        if (!ok) renderApiError('Tag write failed', data);
+        else renderWriteResults(data, arns);
       } catch (e) {
         alert("Batch tagging failed: " + e.message);
       } finally {
@@ -421,45 +465,26 @@ const AWS_REGIONS = [
       }
     };
 
-    function renderWriteResults(data, isOk = true) {
+    function renderWriteResults(data, submittedArns) {
       const container = $('#result-content');
       const output = $('#output');
       output.textContent = JSON.stringify(data, null, 2);
       $('#toggle-json').style.display = 'block';
 
-      if (!isOk) {
-        let html = `<div class="section-title">Validation Error</div>`;
-        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger); font-weight:700">⚠ ${data.message || 'Error occurred'}</div>`;
-        
-        if (data.violations && data.violations.length > 0) {
-          html += `<table style="margin-top:12px; font-size:0.8rem; text-align: left;">
-            <thead><tr><th>Tag</th><th>Violation</th><th>Expected</th></tr></thead><tbody>
-            ${data.violations.map(v => `<tr>
-              <td style="color:var(--danger)">${v.tag}</td>
-              <td>${v.type}</td>
-              <td>${v.expected}</td>
-            </tr>`).join('')}
-            </tbody></table>`;
-        }
-        
-        html += `</div>`;
-        container.innerHTML = html;
-        toast(data.message || 'Operation failed', 'error');
-        return;
-      }
-
-      const failed = data.failed_resources || {};
-      const successArns = (data.arns || []).filter(a => !failed[a]);
+      // 200 → {count}; 207 → {details: {tagged_count, failed_resources}}
+      const failed = (data.details && data.details.failed_resources) || {};
+      const successArns = (submittedArns || []).map(a => a.trim()).filter(a => a && !failed[a]);
+      data.count = data.count ?? (data.details && data.details.tagged_count) ?? successArns.length;
       const failedArns = Object.keys(failed);
 
       let html = `<div class="section-title">Batch Execution Summary</div>`;
 
       if (successArns.length) {
-        html += `<div class="card" style="border-color: var(--success); margin-bottom:1.5rem;"><div style="color:var(--success); font-weight:700">✓ Successful Operations (${successArns.length})</div><div style="font-size:0.75rem; margin-top:10px; color:var(--muted); line-height:1.4">${successArns.join('<br>')}</div></div>`;
+        html += `<div class="card" style="border-color: var(--success); margin-bottom:1.5rem;"><div style="color:var(--success); font-weight:700">✓ Successful Operations (${successArns.length})</div><div style="font-size:0.75rem; margin-top:10px; color:var(--muted); line-height:1.4">${successArns.map(escapeHtml).join('<br>')}</div></div>`;
       }
 
       if (failedArns.length) {
-        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger); font-weight:700">⚠ Partial Failures (${failedArns.length})</div><table style="margin-top:12px; font-size:0.8rem;">${failedArns.map(a => `<tr><td class="arn-cell">${a}</td><td style="color:var(--danger)">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td></tr>`).join('')}</table></div>`;
+        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger); font-weight:700">⚠ Partial Failures (${failedArns.length})</div><table style="margin-top:12px; font-size:0.8rem;">${failedArns.map(a => `<tr><td class="arn-cell">${escapeHtml(a)}</td><td style="color:var(--danger)">${escapeHtml(failed[a].ErrorMessage || 'Access Denied / Not Found')}</td></tr>`).join('')}</table></div>`;
       }
 
       document.getElementById('stat-tagged').textContent = (data.count || 0);
@@ -487,13 +512,9 @@ const AWS_REGIONS = [
       };
 
       try {
-        const res = await fetch("/api/gov", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        renderGovResults(data);
+        const { ok, data } = await apiPost("/api/gov", payload);
+        if (!ok) renderApiError('Auto-tagging scan failed', data);
+        else renderGovResults(data);
       } catch (e) {
         alert("Governance scan failed: " + e.message);
       } finally {
@@ -556,7 +577,7 @@ const AWS_REGIONS = [
       const el = document.createElement('div');
       el.className = `toast toast-${type}`;
       const icons = { success: '✓', error: '✕', info: 'ℹ' };
-      el.innerHTML = `<span style="font-size:1.1rem">${icons[type] || 'ℹ'}</span><span>${msg}</span>`;
+      el.innerHTML = `<span style="font-size:1.1rem">${icons[type] || 'ℹ'}</span><span>${escapeHtml(msg)}</span>`;
       tc.appendChild(el);
       setTimeout(() => el.remove(), 4000);
     }
@@ -574,8 +595,8 @@ const AWS_REGIONS = [
         export_bucket: document.getElementById('report-bucket').value.trim() || null
       };
       try {
-        const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const data = await res.json();
+        const { ok, data } = await apiPost('/api/report', payload);
+        if (!ok) { renderApiError('Compliance report failed', data); return; }
         document.getElementById('output').textContent = JSON.stringify(data, null, 2);
         document.getElementById('toggle-json').style.display = 'block';
         renderReportResults(data);
@@ -599,42 +620,7 @@ const AWS_REGIONS = [
       if (document.getElementById('dash-noncomp-res')) document.getElementById('dash-noncomp-res').innerText = (summary.non_compliant || 0).toLocaleString();
       if (document.getElementById('stat-discovered')) document.getElementById('stat-discovered').innerText = (summary.total_resources || 0).toLocaleString();
 
-      // Update Compliance Tab UI with latest audit data
-      const compTbody = document.getElementById('compliance-table-body');
-      if (compTbody) {
-        let hasResources = false;
-        let tbodyHtml = '';
-        Object.entries(data.regions || {}).forEach(([reg, res]) => {
-          (res.resources || []).forEach(r => {
-            hasResources = true;
-            const violations = r.Violations || [];
-            const missing = violations.filter(v => v.type === 'MISSING_REQUIRED').map(v => v.tag);
-            const arnParts = (r.ResourceARN || '').split(':');
-            const type = arnParts.length > 2 ? arnParts[2] : 'unknown';
-            const account = arnParts.length > 4 ? arnParts[4] : 'unknown';
-            const status = r.IsCompliant ? 'COMPLIANT' : 'NON_COMPLIANT';
-            const missingJson = JSON.stringify(missing).replace(/'/g, "&apos;");
-            const arnEsc = (r.ResourceARN || '').replace(/'/g, "&apos;");
-            const fixBtn = !r.IsCompliant && missing.length
-              ? `<button class="btn-ghost rbac-sensitive" onclick="fixTags('${arnEsc}', '${reg}', ${missingJson})">Fix Tags</button>`
-              : `<button class="btn-ghost" disabled style="opacity:0.3">Fix Tags</button>`;
-
-            tbodyHtml += `<tr>
-                <td class="arn-cell">${r.ResourceARN}</td>
-                <td>${account}</td>
-                <td><span class="status-badge info">${type}</span></td>
-                <td><span class="status-badge ${status === 'COMPLIANT' ? 'ok' : 'err'}">${status}</span></td>
-                <td>${missing.length ? missing.join(', ') : '-'}</td>
-                <td>None</td>
-                <td>${fixBtn}</td>
-            </tr>`;
-          });
-        });
-        if (!hasResources) {
-          tbodyHtml = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;font-size:0.85rem">No resources found.</td></tr>`;
-        }
-        compTbody.innerHTML = tbodyHtml;
-      }
+      // The Compliance tab is refreshed from the cache by loadEnterpriseData() after the report.
 
       const col = score > 80 ? '#34d399' : score > 50 ? '#fbbf24' : '#f87171';
       const circ = 2 * Math.PI * 44;
@@ -669,7 +655,7 @@ const AWS_REGIONS = [
         if (nonCompliant.length) {
           html += `<div class="table-container"><table><thead><tr><th style="width:40px"><input type="checkbox" class="report-select-all"></th><th>Resource ARN</th><th>Tag Violations</th></tr></thead><tbody>`;
           nonCompliant.forEach(r => {
-            html += `<tr><td><input type="checkbox" class="report-res-check" data-arn="${r.ResourceARN}"></td><td class="arn-cell">${r.ResourceARN}</td><td>${(r.Violations || []).map(v => `<span class="status-badge err">${v.tag}</span>`).join('')}</td></tr>`;
+            html += `<tr><td><input type="checkbox" class="report-res-check" data-arn="${escapeHtml(r.ResourceARN)}"></td><td class="arn-cell">${escapeHtml(r.ResourceARN)}</td><td>${(r.Violations || []).map(v => `<span class="status-badge err" title="${escapeHtml(v.type)}">${escapeHtml(v.tag)}</span>`).join('')}</td></tr>`;
           });
           html += `</tbody></table></div>`;
         } else {
@@ -681,19 +667,19 @@ const AWS_REGIONS = [
       document.getElementById('result-content').innerHTML = html;
       
       // Update RBAC state for new buttons in compliance tab
-      if (typeof updateRBAC === 'function') updateRBAC();
+      if (typeof applyPermissions === 'function') applyPermissions();
     }
 
     document.getElementById('btn-sync').onclick = async () => {
       const btn = document.getElementById('btn-sync');
       const vpcId = document.getElementById('sync-vpc-id').value.trim();
       if (!vpcId) return toast('VPC ID is required.', 'error');
-      const reg = (state.regions['sync'] || [])[0] || 'us-east-2';
+      const reg = (state.regions['sync'] || []).filter(r => r !== 'all')[0] || state.defaultRegion;
       btn.disabled = true;
       btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags…';
       try {
-        const res = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync_vpc', vpc_id: vpcId, region: reg }) });
-        const data = await res.json();
+        const { ok, data } = await apiPost('/api/sync', { action: 'sync_vpc', vpc_id: vpcId, region: reg });
+        if (!ok) { renderApiError('VPC tag sync failed', data); return; }
         document.getElementById('output').textContent = JSON.stringify(data, null, 2);
         document.getElementById('toggle-json').style.display = 'block';
         renderSyncResults(data, vpcId);
@@ -823,497 +809,850 @@ const AWS_REGIONS = [
       }
     });
 // -----------------------------------------------------------------------------
-// NEW ENTERPRISE DASHBOARD LOGIC
+// ENTERPRISE DASHBOARD
 // -----------------------------------------------------------------------------
 
-async function loadEnterpriseData() {
-    // Helper: fetch JSON and check for API errors
-    async function safeFetch(url) {
-        const resp = await fetch(url);
-        const data = await resp.json();
-        if (!resp.ok) return { _error: true, _status: resp.status, ...data };
-        return data;
-    }
-    function showUnavailable(tbodyId, colSpan, message) {
-        const el = $(tbodyId);
-        if (el) el.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;color:var(--muted);padding:2rem;font-size:0.85rem">${message}</td></tr>`;
-    }
-
-    try {
-        const dashboard = await safeFetch('/api/dashboard');
-        if (dashboard._error) {
-            console.error("Dashboard API error:", dashboard.message || dashboard.error);
-            if ($('#dash-compliance')) $('#dash-compliance').innerText = 'N/A';
-            if ($('#dash-spend')) $('#dash-spend').innerText = '$--';
-        } else {
-            $('#dash-compliance').innerText = dashboard.compliance_pct + '%';
-            $('#dash-spend').innerText = '$' + (dashboard.total_spend || 0).toLocaleString();
-            $('#dash-violations').innerText = dashboard.active_violations;
-            $('#dash-allocation').innerText = dashboard.allocation_pct + '%';
-            $('#dash-protected').innerText = dashboard.protected_violations;
-            $('#dash-pending').innerText = dashboard.pending_remediation;
-            $('#dash-exemptions').innerText = dashboard.active_exemptions;
-            $('#dash-total-res').innerText = (dashboard.total_resources || 0).toLocaleString();
-            $('#dash-comp-res').innerText = (dashboard.compliant_resources || 0).toLocaleString();
-            $('#dash-noncomp-res').innerText = (dashboard.non_compliant_resources || 0).toLocaleString();
-
-            // Update top-level hero blocks (stats-bar)
-            if ($('#stat-discovered')) $('#stat-discovered').innerText = (dashboard.total_resources || 0).toLocaleString();
-            if ($('#stat-score')) $('#stat-score').innerText = dashboard.compliance_pct + '%';
-            
-            if (dashboard._meta) {
-                if (dashboard._meta.generated_at) {
-                    const ago = Math.round(Date.now()/1000 - dashboard._meta.generated_at);
-                    const agoText = ago < 60 ? `${ago} seconds ago` : `${Math.floor(ago/60)} minutes ago`;
-                    if ($('#meta-last-updated')) $('#meta-last-updated').innerText = `Last updated: ${agoText}`;
-                    if ($('#meta-status-text')) $('#meta-status-text').innerText = 'Showing cached results';
-                } else if (dashboard._meta.status) {
-                    if ($('#meta-status-text')) $('#meta-status-text').innerText = dashboard._meta.status;
-                    if ($('#meta-last-updated')) $('#meta-last-updated').innerText = '';
-                }
-            }
-            
-            // Check cache status for stale-while-revalidate
-            fetch('/api/compliance/status').then(r => r.json()).then(s => {
-                if (s.is_refreshing) {
-                    if ($('#meta-status-text')) $('#meta-status-text').innerText = 'Refreshing from AWS...';
-                    const btn = document.getElementById('btn-refresh-compliance');
-                    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="icon">↻</span> Refreshing...'; }
-                    if (typeof pollRefreshStatus === 'function') pollRefreshStatus();
-                } else if (s.is_stale) {
-                    if (typeof triggerBackgroundRefresh === 'function') triggerBackgroundRefresh();
-                }
-            }).catch(e => console.error(e));
-        }
-    } catch(e) { console.error("Failed to load dashboard", e); }
-    // Security summary for dashboard card — handle 501 gracefully
-    try {
-        const sec = await safeFetch('/api/security');
-        if (!sec._error) {
-            if ($('#dash-drift')) $('#dash-drift').innerText = sec.drift_events ? sec.drift_events.length : sec.protected_tag_violations;
-            if ($('#dash-reverted')) $('#dash-reverted').innerText = sec.reverted_changes;
-            if ($('#dash-pending-sec')) $('#dash-pending-sec').innerText = sec.pending_review;
-        } else {
-            if ($('#dash-drift')) $('#dash-drift').innerText = 'N/A';
-            if ($('#dash-reverted')) $('#dash-reverted').innerText = 'N/A';
-            if ($('#dash-pending-sec')) $('#dash-pending-sec').innerText = 'N/A';
-            if ($('#sec-protected')) $('#sec-protected').innerText = 'N/A';
-            if ($('#sec-unauth')) $('#sec-unauth').innerText = 'N/A';
-            if ($('#sec-reverted')) $('#sec-reverted').innerText = 'N/A';
-        }
-    } catch(e) { /* non-critical */ }
-
-    try {
-        const schema = await safeFetch('/api/schema');
-        const tbody = $('#schema-table-body');
-        if (tbody && !schema._error) {
-            let html = '';
-            schema.forEach(rule => {
-                html += `<tr>
-                    <td class="name-cell">${rule.tag}</td>
-                    <td>${rule.required ? '✅' : '-'}</td>
-                    <td>${rule.protected ? '🔒' : '-'}</td>
-                    <td>${rule.finops ? '💰' : '-'}</td>
-                    <td>${rule.allowed_values.length ? rule.allowed_values.join(', ') : '*'}</td>
-                    <td><span style="font-size: 0.8rem; color: var(--muted)">${rule.description}</span></td>
-                </tr>`;
-            });
-            tbody.innerHTML = html;
-        }
-    } catch(e) { console.error("Failed to load schema", e); }
-
-    try {
-        const comp = await safeFetch('/api/compliance');
-        const tbody = $('#compliance-table-body');
-        if (tbody && !comp._error && comp.resources) {
-            // Store full resource list for pagination
-            window._complianceResources = comp.resources;
-            window._compliancePage = 0;
-            if (comp.resources.length === 0) {
-                showUnavailable('#compliance-table-body', 7,
-                    'No resources found. Run a Compliance Audit first, or ensure AWS credentials and resources exist in the target region.');
-            } else {
-                renderCompliancePage(0);
-            }
-            // Update metadata timestamp from /api/compliance response
-            if (comp._meta && comp._meta.generated_at) {
-                const ago = Math.round(Date.now()/1000 - comp._meta.generated_at);
-                const agoText = ago < 60 ? `${ago} seconds ago` : `${Math.floor(ago/60)} minutes ago`;
-                if ($('#meta-last-updated')) $('#meta-last-updated').innerText = `Last updated: ${agoText}`;
-                if ($('#meta-status-text')) $('#meta-status-text').innerText = 'Showing cached results';
-            }
-        } else if (tbody && comp._error) {
-            showUnavailable('#compliance-table-body', 7, comp.message || 'Failed to load compliance data.');
-        }
-    } catch(e) { console.error("Failed to load compliance", e); }
-
-    try {
-        const finops = await safeFetch('/api/finops');
-        if (!finops._error) {
-            const fmt = (n) => n != null ? '$' + Number(n).toLocaleString() : '$--';
-            if ($('#finops-total')) $('#finops-total').innerText = fmt(finops.TotalSpend);
-            if ($('#finops-tagged')) $('#finops-tagged').innerText = fmt(finops.TaggedSpend);
-            if ($('#finops-untagged')) $('#finops-untagged').innerText = fmt(finops.UntaggedSpend);
-            if ($('#finops-unallocated')) $('#finops-unallocated').innerText = fmt(finops.PotentiallyUnallocated);
-            const tagsList = $('#finops-tags-list');
-            if (tagsList && finops.CostAllocationTags) {
-              tagsList.innerHTML = finops.CostAllocationTags.map(t =>
-                `<span class="status-badge info">💰 ${t}</span>`).join('');
-            }
-        } else {
-            if ($('#finops-total')) $('#finops-total').innerText = 'N/A';
-            if ($('#finops-tagged')) $('#finops-tagged').innerText = 'N/A';
-            if ($('#finops-untagged')) $('#finops-untagged').innerText = 'N/A';
-            if ($('#finops-unallocated')) $('#finops-unallocated').innerText = 'N/A';
-            console.warn("FinOps data unavailable:", finops.message);
-        }
-    } catch(e) { console.error("Failed to load finops", e); }
-    
-    // NOTE: /api/security is fetched once at the top of this function (dashboard card).
-    // Drift table — show unavailable state since security is not implemented.
-    try {
-        showUnavailable('#drift-table-body', 8, 'Security drift detection requires DynamoDB and AWS Config.');
-    } catch(e) { /* non-critical */ }
-
-
-    try {
-        const rem = await safeFetch('/api/remediation');
-        if (!rem._error && rem.tasks) {
-            $('#remediation-table-body').innerHTML = rem.tasks.map(r => `<tr>
-                <td class="arn-cell">${r.resource}</td><td>${r.account}</td><td>${r.violation}</td>
-                <td>${r.deadline}</td><td><span class="status-badge err">${r.status}</span></td>
-                <td><span style="font-size:0.8rem">${r.last_action}</span></td>
-            </tr>`).join('');
-        } else {
-            showUnavailable('#remediation-table-body', 6, rem.message || 'Remediation engine requires DynamoDB state table.');
-        }
-    } catch(e) { console.error("Failed to load remediation", e); }
-    
-    try {
-        const ex = await safeFetch('/api/exemptions');
-        if (!ex._error && ex.exemptions) {
-            $('#exemptions-table-body').innerHTML = ex.exemptions.map(r => `<tr>
-                <td><span class="arn-cell">${r.scope}</span></td><td>${r.reason}</td>
-                <td>${r.owner}</td><td style="font-size:0.8rem">${r.expiration}</td>
-                <td><span class="status-badge ok">${r.status}</span></td>
-                <td><button class="btn-ghost rbac-sensitive" onclick="alert('Revoke triggered')">Revoke</button></td>
-            </tr>`).join('');
-        } else {
-            showUnavailable('#exemptions-table-body', 6, ex.message || 'Exemptions require DynamoDB state table.');
-        }
-    } catch(e) { console.error("Failed to load exemptions", e); }
-    
-    try {
-        const aud = await safeFetch('/api/audit');
-        if (!aud._error && aud.events) {
-            $('#audit-table-body').innerHTML = aud.events.map(r => `<tr>
-                <td>${r.timestamp}</td><td><span class="status-badge info">${r.action}</span></td>
-                <td class="arn-cell">${r.resource}</td><td class="name-cell">${r.actor}</td>
-                <td><span class="status-badge ${r.result === 'SUCCESS' ? 'ok' : 'err'}">${r.result}</span></td>
-                <td><span style="font-size:0.8rem">${r.reason}</span></td>
-            </tr>`).join('');
-        } else {
-            showUnavailable('#audit-table-body', 6, aud.message || 'Audit log requires DynamoDB state table.');
-        }
-    } catch(e) { console.error("Failed to load audit", e); }
-    
-    try {
-        const org = await safeFetch('/api/organization');
-        if (!org._error && org.accounts) {
-            $('#org-table-body').innerHTML = org.accounts.map(r => `<tr>
-                <td class="name-cell">${r.name}</td><td>${r.ou}</td>
-                <td>${r.compliance}%</td><td>${r.resources}</td>
-                <td>${r.violations}</td><td>$${r.spend.toLocaleString()}</td>
-            </tr>`).join('');
-        } else {
-            showUnavailable('#org-table-body', 6, org.message || 'Organization view requires AWS Organizations.');
-        }
-    } catch(e) { console.error("Failed to load organization", e); }
-    
-    try {
-        const cicd = await safeFetch('/api/cicd');
-        if (!cicd._error && cicd.runs) {
-            $('#cicd-table-body').innerHTML = cicd.runs.map(r => `<tr>
-                <td class="name-cell">${r.repo}</td><td><span class="status-badge info">${r.branch}</span></td>
-                <td class="arn-cell">${r.commit}</td>
-                <td><span class="status-badge ${r.status === 'PASSED' ? 'ok' : 'err'}">${r.status}</span></td>
-                <td>${r.violations}</td>
-                <td><button class="btn-ghost">View SARIF</button></td>
-            </tr>`).join('');
-        } else {
-            showUnavailable('#cicd-table-body', 6, cicd.message || 'CI/CD metrics not available in local mode.');
-        }
-    } catch(e) { console.error("Failed to load cicd", e); }
-
-    updateRBAC();
-}
-
-function updateRBAC() {
-    const role = $('#user-role-select').value;
-    const isSensitive = ['PlatformAdmin', 'SecurityAdmin', 'ApplicationOwner'].includes(role);
-    
-    $$('.rbac-sensitive').forEach(el => {
-        if (!isSensitive) {
-            el.setAttribute('disabled', 'true');
-            el.style.opacity = '0.3';
-            el.title = "Unauthorized for current role";
-        } else {
-            el.removeAttribute('disabled');
-            el.style.opacity = '1';
-            el.title = "";
-        }
-    });
-}
-
-// Enterprise init
-document.addEventListener('DOMContentLoaded', () => {
-    // Ensure dashboard tab is active on load
-    const dashBtn = document.getElementById('ent-tab-dashboard');
-    if (dashBtn) dashBtn.click();
-    loadEnterpriseData();
-});
-
+const ent = {
+    me: null,
+    schemaByTag: {},
+    resources: [],
+    filtered: [],
+    page: 0,
+    history: [],
+    polling: null,
+    autoRefreshTried: false,
+};
 const COMPLIANCE_PAGE_SIZE = 50;
+const FIXABLE = new Set(['MISSING_REQUIRED', 'INVALID_VALUE', 'INVALID_FORMAT']);
 
-function renderCompliancePage(page) {
-    const resources = window._complianceResources || [];
-    const totalPages = Math.ceil(resources.length / COMPLIANCE_PAGE_SIZE);
-    const start = page * COMPLIANCE_PAGE_SIZE;
-    const slice = resources.slice(start, start + COMPLIANCE_PAGE_SIZE);
-    window._compliancePage = page;
+const escHtml = escapeHtml;
 
-    const tbody = document.getElementById('compliance-table-body');
-    if (!tbody) return;
+function fmtAgo(epochSeconds) {
+    if (!epochSeconds) return '';
+    const s = Math.max(0, Math.round(Date.now() / 1000 - epochSeconds));
+    const unit = (n, word) => `${n} ${word}${n === 1 ? '' : 's'} ago`;
+    if (s < 60) return unit(s, 'second');
+    if (s < 3600) return unit(Math.floor(s / 60), 'minute');
+    if (s < 86400) return unit(Math.floor(s / 3600), 'hour');
+    return unit(Math.floor(s / 86400), 'day');
+}
 
-    let html = '';
-    slice.forEach(r => {
-        const missingJson = JSON.stringify(r.missing_tags || []);
-        const arnEsc = (r.id || '').replace(/"/g, '&quot;');
-        const regionEsc = (r.region || '').replace(/"/g, '&quot;');
-        const fixBtn = r.status !== 'COMPLIANT' && r.missing_tags && r.missing_tags.length
-            ? `<button class="btn-ghost rbac-sensitive" onclick='fixTags("${arnEsc}","${regionEsc}",${missingJson})'>Fix Tags</button>`
-            : `<button class="btn-ghost" disabled style="opacity:0.3">Fix Tags</button>`;
-        html += `<tr>
-            <td class="arn-cell">${r.id}</td>
-            <td>${r.account}</td>
-            <td><span class="status-badge info">${r.type}</span></td>
-            <td><span class="status-badge ${r.status === 'COMPLIANT' ? 'ok' : 'err'}">${r.status}</span></td>
-            <td>${r.missing_tags && r.missing_tags.length ? r.missing_tags.join(', ') : '-'}</td>
-            <td>${r.remediation_state || 'None'}</td>
-            <td>${fixBtn}</td>
-        </tr>`;
-    });
-    tbody.innerHTML = html;
+function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d) ? String(iso) : d.toLocaleString();
+}
 
-    // Render pagination controls
-    let paginationEl = document.getElementById('compliance-pagination');
-    if (!paginationEl) {
-        paginationEl = document.createElement('div');
-        paginationEl.id = 'compliance-pagination';
-        paginationEl.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;font-size:0.85rem;';
-        tbody.closest('.table-container').after(paginationEl);
+function fmtMoney(n) {
+    return n != null && !isNaN(n) ? '$' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '$--';
+}
+
+function setText(sel, value) {
+    const el = $(sel);
+    if (el) el.innerText = value;
+}
+
+async function safeFetch(url, opts) {
+    try {
+        const resp = await fetch(url, opts);
+        let data = {};
+        try { data = await resp.json(); } catch (e) { data = { message: `HTTP ${resp.status}` }; }
+        if (!resp.ok) return { _error: true, _status: resp.status, ...data };
+        return { _status: resp.status, ...data };
+    } catch (e) {
+        return { _error: true, _status: 0, message: `Network error: ${e.message}` };
     }
-    if (totalPages <= 1) {
-        paginationEl.innerHTML = '';
+}
+
+function showUnavailable(tbodySel, colSpan, message) {
+    const el = $(tbodySel);
+    if (el) el.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;color:var(--muted);padding:2rem;font-size:0.85rem">${escHtml(message)}</td></tr>`;
+}
+
+// ── Identity & permissions (server-side RBAC is authoritative; this only hides what would 403) ──
+
+async function loadIdentity() {
+    ent.me = await window.mePromise;
+    const badge = $('#identity-badge');
+    if (!badge) return;
+    if (!ent.me) {
+        badge.innerHTML = `<span class="status-badge err">Not signed in</span>`;
         return;
     }
-    paginationEl.innerHTML = `
-        <span style="color:var(--muted)">Showing ${start+1}–${Math.min(start+COMPLIANCE_PAGE_SIZE, resources.length)} of ${resources.length}</span>
-        <button class="btn-ghost" onclick="renderCompliancePage(${page-1})" ${page === 0 ? 'disabled' : ''}>← Prev</button>
-        <span style="color:var(--muted)">Page ${page+1} of ${totalPages}</span>
-        <button class="btn-ghost" onclick="renderCompliancePage(${page+1})" ${page >= totalPages-1 ? 'disabled' : ''}>Next →</button>
-    `;
-    if (typeof updateRBAC === 'function') updateRBAC();
+    const roles = (ent.me.roles || []).map(r => `<span class="status-badge info">${escHtml(r)}</span>`).join('')
+        || `<span class="status-badge err" title="No recognised role: read-only access">no role</span>`;
+    badge.innerHTML = `<span class="identity-user">${escHtml(ent.me.user_id)}</span>${roles}
+        <span class="chart-sub" title="Application version">v${escHtml(ent.me.version || '')}</span>`;
+    applyPermissions();
 }
 
-function filterComplianceTable() {
-    const status = $('#comp-filter-status') ? $('#comp-filter-status').value.toLowerCase() : '';
-    const text = $('#comp-filter-text') ? $('#comp-filter-text').value.toLowerCase() : '';
-    $$('#compliance-table-body tr').forEach(row => {
-        const rowText = row.textContent.toLowerCase();
-        const statusMatch = !status || rowText.includes(status);
-        const textMatch = !text || rowText.includes(text);
-        row.style.display = (statusMatch && textMatch) ? '' : 'none';
+function can(permission) {
+    return !!(ent.me && ent.me.permissions && ent.me.permissions[permission]);
+}
+
+function applyPermissions() {
+    const legacyWriteButtons = ['#btn-write', '#btn-gov', '#btn-sync'];
+    legacyWriteButtons.forEach(sel => { const el = $(sel); if (el) el.dataset.perm = 'modify_tags'; });
+    $$('[data-perm]').forEach(el => {
+        const allowed = ent.me === null ? true : can(el.dataset.perm);
+        el.disabled = !allowed;
+        el.style.opacity = allowed ? '' : '0.35';
+        el.title = allowed ? (el.dataset.title || '') : 'Your role does not allow this action';
     });
+}
+const updateRBAC = applyPermissions;  // backwards compatibility
+
+// ── Tooltip ──────────────────────────────────────────────────────────
+
+function showTip(html, x, y) {
+    const tip = $('#chart-tooltip');
+    if (!tip) return;
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+    const pad = 12;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = x + pad, top = y + pad;
+    if (left + w > window.innerWidth - 8) left = x - w - pad;
+    if (top + h > window.innerHeight - 8) top = y - h - pad;
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+}
+
+function hideTip() {
+    const tip = $('#chart-tooltip');
+    if (tip) tip.style.display = 'none';
+}
+
+// ── Loaders ──────────────────────────────────────────────────────────
+
+let _loadingEnterprise = null;
+async function loadEnterpriseData() {
+    if (_loadingEnterprise) return _loadingEnterprise;
+    _loadingEnterprise = (async () => {
+        if (!ent.me) await loadIdentity();
+        await loadSchema();
+        await Promise.allSettled([
+            loadDashboard(), loadCompliance(), loadHistory(), loadFinops(),
+            loadRemediation(), loadExemptions(), loadAudit(),
+        ]);
+        renderStaticUnavailable();
+        applyPermissions();
+        await checkRefreshStatus();
+    })();
+    try { await _loadingEnterprise; } finally { _loadingEnterprise = null; }
+}
+
+async function loadDashboard() {
+    const d = await safeFetch('/api/dashboard');
+    if (d._error) {
+        setText('#dash-compliance', 'N/A');
+        setText('#meta-status-text', d.message || 'Dashboard unavailable');
+        return;
+    }
+    setText('#dash-compliance', d.compliance_pct + '%');
+    setText('#dash-violations', (d.active_violations || 0).toLocaleString());
+    setText('#dash-protected', (d.protected_violations || 0).toLocaleString());
+    setText('#dash-total-res', (d.total_resources || 0).toLocaleString());
+    setText('#dash-comp-res', (d.compliant_resources || 0).toLocaleString());
+    setText('#dash-noncomp-res', (d.non_compliant_resources || 0).toLocaleString());
+    if (ent.me && ent.me.features && ent.me.features.finops && d.total_spend) {
+        setText('#dash-spend', fmtMoney(d.total_spend));
+        setText('#dash-allocation', d.allocation_pct + '%');
+    } else {
+        setText('#dash-spend', '$--');
+        setText('#dash-allocation', '--%');
+    }
+    if ($('#stat-discovered')) setText('#stat-discovered', (d.total_resources || 0).toLocaleString());
+    if ($('#stat-score')) setText('#stat-score', d.compliance_pct + '%');
+
+    const banner = $('#dash-failed-regions');
+    if (banner) {
+        const failed = d.failed_regions || [];
+        banner.style.display = failed.length ? 'block' : 'none';
+        banner.textContent = failed.length
+            ? `⚠ The latest scan could not read ${failed.length} region(s): ${failed.join(', ')}. Their resources are missing from these numbers.`
+            : '';
+    }
+
+    const meta = d._meta || {};
+    if (meta.generated_at) {
+        setText('#meta-last-updated', `Last scan: ${fmtAgo(meta.generated_at)}`);
+        setText('#meta-status-text', 'Showing cached results');
+    } else {
+        setText('#meta-last-updated', '');
+        setText('#meta-status-text', meta.status === 'No data' ? 'No compliance scan yet' : (meta.status || ''));
+    }
+
+    renderTopViolations(d.top_violations || []);
+    renderByService(d.by_service || []);
+}
+
+async function loadSchema() {
+    const schema = await safeFetch('/api/schema');
+    const tbody = $('#schema-table-body');
+    if (schema._error) {
+        if (tbody) showUnavailable('#schema-table-body', 7, schema.message || 'Failed to load schema.');
+        return;
+    }
+    const rules = Array.isArray(schema) ? schema : Object.values(schema).filter(v => v && v.tag);
+    ent.schemaByTag = {};
+    rules.forEach(r => { ent.schemaByTag[r.tag] = r; });
+    if (!tbody) return;
+    tbody.innerHTML = rules.map(rule => `<tr>
+        <td class="name-cell">${escHtml(rule.tag)}${(rule.aliases || []).length ? `<div class="chart-sub">aliases: ${rule.aliases.map(escHtml).join(', ')}</div>` : ''}</td>
+        <td>${rule.required ? '✅ Required' : '-'}</td>
+        <td>${rule.protected ? '🔒' : '-'}</td>
+        <td>${rule.finops ? '💰' : '-'}</td>
+        <td>${rule.allowed_values.length ? rule.allowed_values.map(escHtml).join(', ') : '*'}</td>
+        <td><code style="font-size:0.75rem">${escHtml(rule.regex || '-')}</code></td>
+        <td><span style="font-size: 0.8rem; color: var(--muted)">${escHtml(rule.description || '')}</span></td>
+    </tr>`).join('');
+}
+
+async function loadCompliance() {
+    const comp = await safeFetch('/api/compliance?include_exemptions=1');
+    if (comp._error) {
+        ent.resources = [];
+        showUnavailable('#compliance-table-body', 8, comp.message || 'Failed to load compliance data.');
+        return;
+    }
+    ent.resources = comp.resources || [];
+    populateComplianceFilters();
+    filterComplianceTable(true);
+}
+
+async function loadHistory() {
+    const h = await safeFetch('/api/compliance/history?limit=30');
+    ent.history = h._error ? [] : (h.scans || []);
+    renderTrend(ent.history);
+}
+
+async function loadFinops() {
+    const ids = ['#finops-total', '#finops-tagged', '#finops-untagged', '#finops-unallocated'];
+    const features = (ent.me && ent.me.features) || {};
+    if (features.finops === false) {
+        ids.forEach(id => setText(id, 'Off'));
+        return;
+    }
+    if (ent.me && !can('view_finops')) {
+        ids.forEach(id => setText(id, '🔒'));
+        const tags = $('#finops-tags-list');
+        if (tags) tags.innerHTML = `<span class="chart-sub">FinOps data requires the FinOps or PlatformAdmin role.</span>`;
+        return;
+    }
+    const f = await safeFetch('/api/finops');
+    if (f._error || f.error === 'not_ready') {
+        ids.forEach(id => setText(id, f.error === 'not_ready' ? '…' : 'N/A'));
+        const tags = $('#finops-tags-list');
+        if (tags) tags.innerHTML = `<span class="chart-sub">${escHtml(f.message || 'FinOps data unavailable.')}</span>`;
+        return;
+    }
+    setText('#finops-total', fmtMoney(f.TotalSpend));
+    setText('#finops-tagged', fmtMoney(f.TaggedSpend));
+    setText('#finops-untagged', fmtMoney(f.UntaggedSpend));
+    setText('#finops-unallocated', fmtMoney(f.PotentiallyUnallocated));
+    const tagsList = $('#finops-tags-list');
+    if (tagsList) {
+        tagsList.innerHTML = (f.CostAllocationTags || []).length
+            ? f.CostAllocationTags.map(t => `<span class="status-badge info">💰 ${escHtml(t)}</span>`).join('')
+            : `<span class="chart-sub">No schema tag is marked <code>finops.cost_allocation: true</code>.</span>`;
+    }
+}
+
+const REMEDIATION_BADGE = {
+    COMPLETED: 'ok', SKIPPED_EXEMPT: 'info', PENDING: 'warn', IN_PROGRESS: 'warn',
+    FAILED_RETRYABLE: 'warn', FAILED: 'err',
+};
+
+async function loadRemediation() {
+    const rem = await safeFetch('/api/remediation?limit=100');
+    if (rem._error) {
+        setText('#dash-pending', 'N/A');
+        showUnavailable('#remediation-table-body', 7, `Remediation state unavailable (DynamoDB state table): ${rem.message || 'not reachable'}`);
+        return;
+    }
+    setText('#dash-pending', (rem.pending || 0).toLocaleString());
+    const actions = rem.actions || [];
+    if (!actions.length) {
+        showUnavailable('#remediation-table-body', 7, 'No remediation actions yet.');
+        return;
+    }
+    $('#remediation-table-body').innerHTML = actions.map(a => {
+        const tags = Object.entries(a.requested_tags || {})
+            .map(([k, v]) => `<span class="tag-chip"><b>${escHtml(k)}</b> ${escHtml(v)}</span>`).join('');
+        const last = a.last_error_code ? `error: ${a.last_error_code}` : (a.updated_at ? fmtDate(a.updated_at) : '');
+        return `<tr>
+            <td class="arn-cell">${escHtml(a.resource_arn)}</td>
+            <td>${escHtml(a.account_id || '')}</td>
+            <td>${tags || '-'}</td>
+            <td style="font-size:0.8rem">${escHtml(fmtDate(a.created_at))}</td>
+            <td>-</td>
+            <td><span class="status-badge ${REMEDIATION_BADGE[a.status] || 'info'}">${escHtml(a.status)}</span>
+                <div class="chart-sub">attempts: ${escHtml(a.attempt_count ?? 0)}</div></td>
+            <td><span style="font-size:0.8rem">${escHtml(last)}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+function exemptionScope(ex) {
+    if (ex.resource_id) return ex.resource_id;
+    return [
+        ex.account_id && `account ${ex.account_id}`,
+        ex.resource_type && `type ${ex.resource_type}`,
+        ex.environment && `env ${ex.environment}`,
+    ].filter(Boolean).join(' · ') || '-';
+}
+
+async function loadExemptions() {
+    const ex = await safeFetch('/api/exemptions');
+    if (ex._error) {
+        setText('#dash-exemptions', 'N/A');
+        showUnavailable('#exemptions-table-body', 6, `Exemptions unavailable (DynamoDB state table): ${ex.message || 'not reachable'}`);
+        return;
+    }
+    const list = ex.exemptions || [];
+    setText('#dash-exemptions', list.length.toLocaleString());
+    if (!list.length) {
+        showUnavailable('#exemptions-table-body', 6, 'No active exemptions.');
+        return;
+    }
+    $('#exemptions-table-body').innerHTML = list.map(r => `<tr>
+        <td><span class="arn-cell">${escHtml(exemptionScope(r))}</span></td>
+        <td>${escHtml(r.reason || '-')}</td>
+        <td>${escHtml(r.created_by || '-')}</td>
+        <td style="font-size:0.8rem">${r.expires_at ? escHtml(fmtDate(r.expires_at)) : '<span style="color:var(--warning)">Never</span>'}</td>
+        <td><span class="status-badge ok">${escHtml(r.status)}</span></td>
+        <td><button class="btn-ghost" data-perm="manage_exemptions" data-action="revoke-exemption" data-id="${escHtml(r.id)}">Revoke</button></td>
+    </tr>`).join('');
+}
+
+async function revokeExemption(id) {
+    if (!confirm('Revoke this exemption? The resource will be evaluated normally again.')) return;
+    const res = await safeFetch(`/api/exemptions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (res._error) return toast(res.message || 'Failed to revoke exemption', 'error');
+    toast('Exemption revoked', 'success');
+    loadEnterpriseData();
+}
+
+async function loadAudit() {
+    const aud = await safeFetch('/api/audit?limit=100');
+    if (aud._error) {
+        showUnavailable('#audit-table-body', 6, aud.message || 'Audit log unavailable.');
+        return;
+    }
+    const events = aud.audit_events || [];
+    if (!events.length) {
+        showUnavailable('#audit-table-body', 6, 'No audit events yet. Tag writes, remediations and exemption changes are recorded here.');
+        return;
+    }
+    $('#audit-table-body').innerHTML = events.map(e => {
+        const d = e.details || {};
+        let reason = d.reason || d.error_code || '';
+        if (!reason && d.tags_requested) {
+            reason = Object.entries(d.tags_requested).map(([k, v]) => `${k}=${v}`).join(', ');
+        }
+        if (!reason && d.exemption_id) reason = `exemption ${d.exemption_id}`;
+        return `<tr>
+            <td style="font-size:0.8rem">${escHtml(fmtDate(e.timestamp))}</td>
+            <td><span class="status-badge info">${escHtml(e.action)}</span></td>
+            <td class="arn-cell">${escHtml(e.resource_arn || '-')}</td>
+            <td class="name-cell">${escHtml(e.actor || '-')}</td>
+            <td><span class="status-badge ${e.result === 'SUCCESS' || e.result === 'COMPLETED' ? 'ok' : 'err'}">${escHtml(e.result)}</span></td>
+            <td><span style="font-size:0.8rem">${escHtml(reason)}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderStaticUnavailable() {
+    // These areas need AWS Config / Organizations integrations that aren't configured.
+    ['#dash-drift', '#dash-reverted', '#dash-pending-sec', '#sec-protected', '#sec-unauth', '#sec-reverted', '#sec-pending']
+        .forEach(id => setText(id, 'N/A'));
+    showUnavailable('#drift-table-body', 8, 'Protected-tag drift detection requires AWS Config and the DynamoDB state table.');
+    showUnavailable('#org-table-body', 6, 'Organization view requires AWS Organizations integration (see docs/MULTI_ACCOUNT.md).');
+    showUnavailable('#cicd-table-body', 6, 'CI/CD results come from the CLI: ./aws-tagging-utils validate <dir> --format sarif');
+}
+
+// ── Charts ───────────────────────────────────────────────────────────
+
+function renderTrend(scans) {
+    const host = $('#dash-trend');
+    if (!host) return;
+    renderTrendTable(scans);
+    if (!scans.length) {
+        host.innerHTML = '<div class="chart-empty">No scans yet. Run a compliance refresh to start the trend.</div>';
+        return;
+    }
+    const W = Math.max(320, host.clientWidth || 800), H = 220;
+    const m = { top: 16, right: 52, bottom: 28, left: 40 };
+    const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+    const n = scans.length;
+    const x = i => m.left + (n === 1 ? iw / 2 : (i * iw) / (n - 1));
+    const y = v => m.top + ih - (Math.max(0, Math.min(100, v)) / 100) * ih;
+    const pts = scans.map((s, i) => [x(i), y(Number(s.compliance_score) || 0)]);
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img"
+        aria-label="Compliance score trend over the last ${n} scans">`;
+    [0, 50, 100].forEach(t => {
+        svg += `<line x1="${m.left}" x2="${W - m.right}" y1="${y(t)}" y2="${y(t)}" stroke="var(--chart-grid)" stroke-width="1"/>
+                <text class="chart-axis-text" x="${m.left - 8}" y="${y(t) + 4}" text-anchor="end">${t}%</text>`;
+    });
+    const fmtDay = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+    svg += `<text class="chart-axis-text" x="${pts[0][0]}" y="${H - 6}" text-anchor="${n === 1 ? 'middle' : 'start'}">${escHtml(fmtDay(scans[0].timestamp))}</text>`;
+    if (n > 1) svg += `<text class="chart-axis-text" x="${pts[n - 1][0]}" y="${H - 6}" text-anchor="end">${escHtml(fmtDay(scans[n - 1].timestamp))}</text>`;
+
+    if (n > 1) {
+        const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+        const area = `${line} L${pts[n - 1][0].toFixed(1)},${y(0)} L${pts[0][0].toFixed(1)},${y(0)} Z`;
+        svg += `<path d="${area}" fill="var(--chart-series-wash)" stroke="none"/>
+                <path d="${line}" fill="none" stroke="var(--chart-series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+    const last = pts[n - 1];
+    svg += `<line id="trend-crosshair" x1="0" x2="0" y1="${m.top}" y2="${m.top + ih}" stroke="var(--muted)" stroke-width="1" style="display:none"/>
+            <circle id="trend-hover-dot" r="5" fill="var(--chart-series)" stroke="var(--chart-surface)" stroke-width="2" style="display:none"/>
+            <circle cx="${last[0]}" cy="${last[1]}" r="5" fill="var(--chart-series)" stroke="var(--chart-surface)" stroke-width="2"/>
+            <text class="chart-label-text" x="${last[0] + 10}" y="${last[1] + 4}">${escHtml(scans[n - 1].compliance_score)}%</text>`;
+    // Hit bands wider than the marks, one per scan
+    const band = n === 1 ? iw : iw / (n - 1);
+    pts.forEach((p, i) => {
+        svg += `<rect class="trend-hit" data-i="${i}" x="${p[0] - band / 2}" y="${m.top}" width="${band}" height="${ih}" fill="transparent"/>`;
+    });
+    svg += `</svg>`;
+    host.innerHTML = svg;
+
+    const cross = host.querySelector('#trend-crosshair');
+    const dot = host.querySelector('#trend-hover-dot');
+    host.querySelectorAll('.trend-hit').forEach(r => {
+        r.addEventListener('mousemove', ev => {
+            const i = Number(r.dataset.i), s = scans[i], p = pts[i];
+            cross.setAttribute('x1', p[0]); cross.setAttribute('x2', p[0]); cross.style.display = '';
+            dot.setAttribute('cx', p[0]); dot.setAttribute('cy', p[1]); dot.style.display = '';
+            showTip(`<b>${escHtml(s.compliance_score)}%</b> compliant<br>
+                <span class="tt-muted">${escHtml(fmtDate(s.timestamp))}</span><br>
+                ${escHtml(s.compliant)} / ${escHtml(s.total_resources)} resources ·
+                <span class="tt-muted">${escHtml((s.regions || []).join(', '))}</span>`, ev.clientX, ev.clientY);
+        });
+        r.addEventListener('mouseleave', () => { cross.style.display = 'none'; dot.style.display = 'none'; hideTip(); });
+    });
+}
+
+function renderTrendTable(scans) {
+    const host = $('#dash-trend-table');
+    if (!host) return;
+    host.innerHTML = scans.length ? `<table class="trend-table"><thead><tr>
+        <th>Scan time</th><th>Regions</th><th>Resources</th><th>Compliant</th><th>Score</th></tr></thead><tbody>
+        ${scans.slice().reverse().map(s => `<tr><td>${escHtml(fmtDate(s.timestamp))}</td><td>${escHtml((s.regions || []).join(', '))}</td>
+        <td>${escHtml(s.total_resources)}</td><td>${escHtml(s.compliant)}</td><td>${escHtml(s.compliance_score)}%</td></tr>`).join('')}
+        </tbody></table>` : '';
+}
+
+function toggleTrendTable() {
+    const t = $('#dash-trend-table');
+    const btn = $('#trend-table-toggle');
+    const show = t.style.display === 'none';
+    t.style.display = show ? 'block' : 'none';
+    btn.textContent = show ? 'Hide table' : 'View as table';
+}
+
+function renderHBars(hostSel, rows, emptyText) {
+    const host = $(hostSel);
+    if (!host) return;
+    if (!rows.length) {
+        host.innerHTML = `<div class="chart-empty">${escHtml(emptyText)}</div>`;
+        return;
+    }
+    host.innerHTML = `<div class="hbar-list">${rows.map((r, i) => `
+        <div class="hbar-row" tabindex="0" data-i="${i}">
+            <div class="hbar-name" title="${escHtml(r.name)}">${r.label}</div>
+            <div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(0, Math.min(100, r.pct)).toFixed(1)}%"></div></div>
+            <div class="hbar-value">${escHtml(r.value)}</div>
+        </div>`).join('')}</div>`;
+    host.querySelectorAll('.hbar-row').forEach(el => {
+        const r = rows[Number(el.dataset.i)];
+        el.addEventListener('mousemove', ev => showTip(r.tip, ev.clientX, ev.clientY));
+        el.addEventListener('mouseleave', hideTip);
+        el.addEventListener('focus', () => { const b = el.getBoundingClientRect(); showTip(r.tip, b.right, b.top); });
+        el.addEventListener('blur', hideTip);
+    });
+}
+
+const VIOLATION_LABEL = {
+    MISSING_REQUIRED: 'missing', INVALID_VALUE: 'invalid value', INVALID_FORMAT: 'invalid format',
+    NORMALIZATION_CONFLICT: 'conflicting aliases', UNKNOWN_TAG: 'unknown tag',
+};
+
+function renderTopViolations(list) {
+    const max = Math.max(1, ...list.map(v => v.count));
+    renderHBars('#dash-top-violations', list.slice(0, 8).map(v => ({
+        name: `${v.tag} ${v.type}`,
+        label: `${escHtml(v.tag)} <small>${escHtml(VIOLATION_LABEL[v.type] || v.type)}</small>`,
+        pct: (v.count / max) * 100,
+        value: v.count.toLocaleString(),
+        tip: `<b>${escHtml(v.tag)}</b> · ${escHtml(VIOLATION_LABEL[v.type] || v.type)}<br>${escHtml(v.count)} resources affected`,
+    })), 'No violations in the latest scan. 🎉');
+}
+
+function renderByService(list) {
+    renderHBars('#dash-by-service', list.slice(0, 8).map(s => ({
+        name: s.name,
+        label: escHtml(s.name),
+        pct: s.compliance_pct,
+        value: `${s.compliance_pct}%`,
+        tip: `<b>${escHtml(s.name)}</b><br>${escHtml(s.compliant)} of ${escHtml(s.total)} resources compliant`,
+    })), 'No resources in the latest scan.');
+}
+
+// ── Compliance table ─────────────────────────────────────────────────
+
+function populateComplianceFilters() {
+    const fill = (sel, values, allLabel) => {
+        const el = $(sel);
+        if (!el) return;
+        const current = el.value;
+        el.innerHTML = `<option value="">${allLabel}</option>` +
+            [...new Set(values)].sort().map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+        if ([...el.options].some(o => o.value === current)) el.value = current;
+    };
+    fill('#comp-filter-service', ent.resources.map(r => r.type), 'All Services');
+    fill('#comp-filter-region', ent.resources.map(r => r.region), 'All Regions');
+}
+
+function filterComplianceTable(keepPage = false) {
+    const status = $('#comp-filter-status') ? $('#comp-filter-status').value : '';
+    const service = $('#comp-filter-service') ? $('#comp-filter-service').value : '';
+    const region = $('#comp-filter-region') ? $('#comp-filter-region').value : '';
+    const issue = $('#comp-filter-issue') ? $('#comp-filter-issue').value : '';
+    const text = ($('#comp-filter-text') ? $('#comp-filter-text').value : '').trim().toLowerCase();
+
+    ent.filtered = ent.resources.filter(r => {
+        if (status && r.status !== status) return false;
+        if (service && r.type !== service) return false;
+        if (region && r.region !== region) return false;
+        if (issue === 'EXEMPT' && r.exemption_state !== 'EXEMPT') return false;
+        if (issue === 'UNKNOWN_TAG' && !(r.warnings || []).some(w => w.type === 'UNKNOWN_TAG')) return false;
+        if (issue && issue !== 'EXEMPT' && issue !== 'UNKNOWN_TAG' && !(r.violations || []).some(v => v.type === issue)) return false;
+        if (text) {
+            const hay = [r.id, r.account, r.region, ...Object.entries(r.tags || {}).map(([k, v]) => `${k}=${v}`)].join(' ').toLowerCase();
+            if (!hay.includes(text)) return false;
+        }
+        return true;
+    });
+    const maxPage = Math.max(0, Math.ceil(ent.filtered.length / COMPLIANCE_PAGE_SIZE) - 1);
+    renderCompliancePage(keepPage ? Math.min(ent.page, maxPage) : 0);
+}
+
+function renderIssuesCell(violations, warnings) {
+    const parts = (violations || []).map(v =>
+        `<div title="${escHtml(v.expected || '')}"><span class="status-badge err">${escHtml(VIOLATION_LABEL[v.type] || v.type)}</span> ${escHtml(v.tag)}${v.actual && v.type !== 'MISSING_REQUIRED' ? ` = ${escHtml(v.actual)}` : ''}</div>`);
+    (warnings || []).forEach(w =>
+        parts.push(`<div title="${escHtml(w.expected || '')}"><span class="status-badge warn">${escHtml(VIOLATION_LABEL[w.type] || w.type)}</span> ${escHtml(w.tag)}</div>`));
+    return parts.length ? parts.join('') : '-';
+}
+
+function renderTagsCell(tags) {
+    const entries = Object.entries(tags || {});
+    if (!entries.length) return '<span style="color:var(--muted)">No tags</span>';
+    return entries.map(([k, v]) => `<span class="tag-chip"><b>${escHtml(k)}</b> ${escHtml(v)}</span>`).join('');
+}
+
+function renderCompliancePage(page) {
+    const tbody = $('#compliance-table-body');
+    if (!tbody) return;
+    const rows = ent.filtered;
+    const countEl = $('#comp-result-count');
+
+    if (!ent.resources.length) {
+        showUnavailable('#compliance-table-body', 8, 'No resources found. Run a compliance refresh, or check AWS credentials and the scanned regions.');
+        if (countEl) countEl.textContent = '';
+        renderPagination(0, 0);
+        return;
+    }
+    if (!rows.length) {
+        showUnavailable('#compliance-table-body', 8, 'No resources match these filters.');
+        if (countEl) countEl.textContent = `0 of ${ent.resources.length} resources`;
+        renderPagination(0, 0);
+        return;
+    }
+
+    const totalPages = Math.ceil(rows.length / COMPLIANCE_PAGE_SIZE);
+    ent.page = Math.max(0, Math.min(page, totalPages - 1));
+    const start = ent.page * COMPLIANCE_PAGE_SIZE;
+    const slice = rows.slice(start, start + COMPLIANCE_PAGE_SIZE);
+    if (countEl) {
+        countEl.textContent = `Showing ${start + 1}–${start + slice.length} of ${rows.length}` +
+            (rows.length !== ent.resources.length ? ` (filtered from ${ent.resources.length})` : '') + ' resources';
+    }
+
+    tbody.innerHTML = slice.map((r, k) => {
+        const idx = start + k;
+        const fixable = (r.violations || []).some(v => FIXABLE.has(v.type));
+        const exempt = r.exemption_state === 'EXEMPT';
+        const actions = [
+            fixable ? `<button class="btn-ghost" data-perm="modify_tags" data-action="fix" data-idx="${idx}">Fix Tags</button>` : '',
+            r.status !== 'COMPLIANT' && !exempt ? `<button class="btn-ghost" data-perm="manage_exemptions" data-action="exempt" data-idx="${idx}">Exempt</button>` : '',
+        ].join('') || '<span style="color:var(--muted)">-</span>';
+        const exemptCell = exempt
+            ? `<span class="status-badge info">Exempt</span>${r.exemption_expires_at ? `<div class="chart-sub">until ${escHtml(new Date(r.exemption_expires_at).toLocaleDateString())}</div>` : ''}`
+            : (r.exemption_state === 'Unknown' ? '<span class="chart-sub" title="The exemption store (DynamoDB) could not be read">unavailable</span>' : '-');
+        return `<tr>
+            <td class="arn-cell">${escHtml(r.id)}<div class="chart-sub">${escHtml(r.region)}</div></td>
+            <td>${escHtml(r.account)}</td>
+            <td><span class="status-badge info">${escHtml(r.type)}</span></td>
+            <td><span class="status-badge ${r.status === 'COMPLIANT' ? 'ok' : 'err'}">${escHtml(r.status)}</span></td>
+            <td>${renderTagsCell(r.tags)}</td>
+            <td>${renderIssuesCell(r.violations, r.warnings)}</td>
+            <td>${exemptCell}</td>
+            <td style="white-space:nowrap">${actions}</td>
+        </tr>`;
+    }).join('');
+    renderPagination(ent.page, totalPages);
+    applyPermissions();
+}
+
+function renderPagination(page, totalPages) {
+    const tbody = $('#compliance-table-body');
+    let el = $('#compliance-pagination');
+    if (!el && tbody) {
+        el = document.createElement('div');
+        el.id = 'compliance-pagination';
+        el.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;font-size:0.85rem;';
+        tbody.closest('.table-container').after(el);
+    }
+    if (!el) return;
+    if (totalPages <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button class="btn-ghost" ${page === 0 ? 'disabled style="opacity:0.3"' : ''} onclick="renderCompliancePage(${page - 1})">← Prev</button>
+        <span style="color:var(--muted)">Page ${page + 1} of ${totalPages}</span>
+        <button class="btn-ghost" ${page >= totalPages - 1 ? 'disabled style="opacity:0.3"' : ''} onclick="renderCompliancePage(${page + 1})">Next →</button>`;
+}
+
+// Delegated row actions (no data is interpolated into inline JS)
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn || btn.disabled) return;
+    const action = btn.dataset.action;
+    if (action === 'fix') openFixTags(ent.filtered[Number(btn.dataset.idx)]);
+    else if (action === 'exempt') openExempt(ent.filtered[Number(btn.dataset.idx)]);
+    else if (action === 'revoke-exemption') revokeExemption(btn.dataset.id);
+});
+
+// ── Refresh orchestration ────────────────────────────────────────────
+
+function setRefreshButton(busy) {
+    const btn = $('#btn-refresh-compliance');
+    if (!btn) return;
+    btn.disabled = busy;
+    btn.innerHTML = busy ? '<span class="icon">↻</span> Refreshing...' : '<span class="icon">↻</span> Refresh';
+}
+
+async function checkRefreshStatus() {
+    const s = await safeFetch('/api/compliance/status');
+    if (s._error) return;
+    if (s.is_refreshing) {
+        setText('#meta-status-text', 'Refreshing from AWS...');
+        setRefreshButton(true);
+        startPolling();
+    } else if (s.last_refresh_error) {
+        setText('#meta-status-text', `Last refresh failed: ${s.last_refresh_error}`);
+    } else if (s.is_stale && !ent.autoRefreshTried) {
+        // Auto-refresh once per page load; a failing refresh must not loop forever
+        ent.autoRefreshTried = true;
+        triggerBackgroundRefresh();
+    }
 }
 
 async function triggerBackgroundRefresh() {
-    const btn = document.getElementById('btn-refresh-compliance');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="icon">↻</span> Refreshing...';
+    ent.autoRefreshTried = true;
+    setRefreshButton(true);
+    setText('#meta-status-text', 'Refreshing from AWS...');
+    const res = await safeFetch('/api/compliance/refresh', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    if (res._error) {
+        setText('#meta-status-text', `Refresh failed: ${res.message || 'error'}`);
+        setRefreshButton(false);
+        return;
     }
-    const statusEl = document.getElementById('meta-status-text');
-    if (statusEl) statusEl.innerText = 'Refreshing from AWS...';
-    
-    try {
-        const res = await fetch('/api/compliance/refresh', { method: 'POST', body: '{}' });
-        if (res.ok) {
-            pollRefreshStatus();
-        } else {
-            if (statusEl) statusEl.innerText = 'Refresh failed.';
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="icon">↻</span> Refresh'; }
-        }
-    } catch(e) {
-        if (statusEl) statusEl.innerText = 'Refresh error.';
-        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="icon">↻</span> Refresh'; }
-    }
+    startPolling();
 }
 
-function pollRefreshStatus() {
-    const interval = setInterval(async () => {
-        try {
-            const res = await fetch('/api/compliance/status');
-            const status = await res.json();
-            if (!status.is_refreshing) {
-                clearInterval(interval);
-                loadEnterpriseData();
-                const statusEl = document.getElementById('meta-status-text');
-                if (statusEl) {
-                    statusEl.innerText = status.last_refresh_error
-                        ? `Refresh failed: ${status.last_refresh_error}`
-                        : 'Updated just now.';
-                }
-                const btn = document.getElementById('btn-refresh-compliance');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<span class="icon">↻</span> Refresh';
-                }
-            }
-        } catch(e) {
-            clearInterval(interval);
-            const btn = document.getElementById('btn-refresh-compliance');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="icon">↻</span> Refresh'; }
+function startPolling() {
+    if (ent.polling) return;  // one poller at a time
+    ent.polling = setInterval(async () => {
+        const s = await safeFetch('/api/compliance/status');
+        if (s._error || !s.is_refreshing) {
+            clearInterval(ent.polling);
+            ent.polling = null;
+            setRefreshButton(false);
+            await loadEnterpriseData();
+            setText('#meta-status-text', s.last_refresh_error
+                ? `Refresh failed: ${s.last_refresh_error}`
+                : 'Updated just now.');
+            if (s.last_refresh_error) toast(`Compliance refresh: ${s.last_refresh_error}`, 'error');
         }
     }, 2000);
 }
 
+// ── Fix Tags modal ───────────────────────────────────────────────────
 
-/**
- * Open the Fix Tags modal for a single non-compliant resource.
- * @param {string} arn      - Full resource ARN
- * @param {string} region   - AWS region where the resource lives
- * @param {string[]} missingTags - List of tag keys that are missing
- */
-function fixTags(arn, region, missingTags) {
-    const modal = document.getElementById('fix-tags-modal');
-    if (!modal) return;
+function fieldId(tag) { return 'fix-tag-val-' + tag.replace(/[^a-zA-Z0-9]/g, '-'); }
 
-    document.getElementById('fix-tags-arn').textContent = arn;
-    document.getElementById('fix-tags-region').textContent = region;
+function openFixTags(r) {
+    const modal = $('#fix-tags-modal');
+    if (!modal || !r) return;
+    const issues = (r.violations || []).filter(v => FIXABLE.has(v.type));
+    const tags = [...new Set(issues.map(v => v.tag))];
+    modal._arn = r.id;
+    modal._tags = tags;
+    $('#fix-tags-arn').textContent = r.id;
+    $('#fix-tags-region').textContent = r.region;
 
-    // Store state on the modal element for fixTagsConfirm()
-    modal._arn = arn;
-    modal._region = region;
-    modal._missingTags = missingTags;
+    $('#fix-tags-fields').innerHTML = tags.map(tag => {
+        const rule = ent.schemaByTag[tag] || {};
+        const v = issues.find(i => i.tag === tag);
+        const current = (r.tags || {})[tag] || '';
+        const hint = v.type === 'MISSING_REQUIRED' ? 'missing' : `invalid: ${current}`;
+        const input = (rule.allowed_values || []).length
+            ? `<select id="${fieldId(tag)}" style="width:100%">
+                 <option value="">Select…</option>
+                 ${rule.allowed_values.map(a => `<option value="${escHtml(a)}">${escHtml(a)}</option>`).join('')}
+               </select>`
+            : `<input id="${fieldId(tag)}" type="text" value="${escHtml(v.type === 'MISSING_REQUIRED' ? '' : current)}"
+                 placeholder="${escHtml(rule.regex ? 'must match ' + rule.regex : 'Value for ' + tag)}"
+                 ${rule.regex ? `data-pattern="${escHtml(rule.regex)}"` : ''} style="width:100%;font-size:0.9rem;">`;
+        return `<div>
+            <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">
+              ${escHtml(tag)} <span style="color:var(--danger)">*</span> <span class="chart-sub">(${escHtml(hint)})</span></label>
+            ${input}
+            ${rule.description ? `<div class="chart-sub">${escHtml(rule.description)}</div>` : ''}
+        </div>`;
+    }).join('');
 
-    // Build one input row per missing tag
-    const fields = document.getElementById('fix-tags-fields');
-    fields.innerHTML = missingTags.map(tag => `
-        <div>
-          <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">${tag} <span style="color:var(--danger)">*</span></label>
-          <input
-            id="fix-tag-val-${tag.replace(/[^a-zA-Z0-9]/g,'-')}"
-            type="text"
-            placeholder="Enter value for ${tag}"
-            style="width:100%;font-size:0.9rem;"
-          />
-        </div>
-    `).join('');
-
-    const statusEl = document.getElementById('fix-tags-status');
+    const statusEl = $('#fix-tags-status');
     statusEl.style.display = 'none';
-    statusEl.textContent = '';
-
-    const submitBtn = document.getElementById('fix-tags-submit');
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Apply Tags';
-
+    const submit = $('#fix-tags-submit');
+    submit.disabled = false;
+    submit.textContent = 'Apply Tags';
+    submit.onclick = fixTagsConfirm;
     modal.style.display = 'flex';
-
-    // Focus first input
-    const first = fields.querySelector('input');
+    const first = $('#fix-tags-fields').querySelector('input,select');
     if (first) setTimeout(() => first.focus(), 50);
-
-    // Close on backdrop click
     modal.onclick = (e) => { if (e.target === modal) closeFixTagsModal(); };
 }
 
 function closeFixTagsModal() {
-    const modal = document.getElementById('fix-tags-modal');
+    const modal = $('#fix-tags-modal');
     if (modal) modal.style.display = 'none';
 }
 
 async function fixTagsConfirm() {
-    const modal = document.getElementById('fix-tags-modal');
-    if (!modal) return;
-
-    const arn = modal._arn;
-    const region = modal._region;
-    const missingTags = modal._missingTags || [];
-
-    // Collect values — validate all are filled
+    const modal = $('#fix-tags-modal');
     const tags = {};
-    let allFilled = true;
-    missingTags.forEach(tag => {
-        const input = document.getElementById('fix-tag-val-' + tag.replace(/[^a-zA-Z0-9]/g, '-'));
-        const val = input ? input.value.trim() : '';
-        if (!val) { allFilled = false; if (input) input.style.border = '1px solid var(--danger)'; }
-        else { tags[tag] = val; if (input) input.style.border = ''; }
-    });
-
-    if (!allFilled) {
-        showFixTagsStatus('Please fill in all required tag values.', 'error');
-        return;
-    }
-
-    const submitBtn = document.getElementById('fix-tags-submit');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<div class="loading-spinner" style="width:14px;height:14px;border-width:2px;"></div> Applying…';
-
-    try {
-        const payload = {
-            action: 'write',
-            resource_arn: arn,
-            region: region,
-            tags: tags
-        };
-        const res = await fetch('/api/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-
-        if (res.ok && !data.error) {
-            showFixTagsStatus(`✅ Tags applied successfully! The resource will be re-evaluated on the next compliance scan.`, 'success');
-            submitBtn.textContent = 'Done';
-            submitBtn.onclick = closeFixTagsModal;
-            // Trigger a background refresh so the compliance table updates
-            setTimeout(() => {
-                if (typeof triggerBackgroundRefresh === 'function') triggerBackgroundRefresh();
-            }, 800);
-        } else {
-            const msg = data.message || data.error || 'Unknown error';
-            showFixTagsStatus(`❌ Failed: ${msg}`, 'error');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Retry';
+    let valid = true;
+    (modal._tags || []).forEach(tag => {
+        const el = document.getElementById(fieldId(tag));
+        const val = el ? el.value.trim() : '';
+        let ok = !!val;
+        if (ok && el.dataset.pattern) {
+            try { ok = new RegExp(el.dataset.pattern).test(val); } catch (e) { /* server validates */ }
         }
-    } catch(e) {
-        showFixTagsStatus(`❌ Network error: ${e.message}`, 'error');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Retry';
+        el.style.border = ok ? '' : '1px solid var(--danger)';
+        if (ok) tags[tag] = val; else valid = false;
+    });
+    if (!valid) return showModalStatus('#fix-tags-status', 'Fill in every field with a valid value.', 'error');
+
+    const submit = $('#fix-tags-submit');
+    submit.disabled = true;
+    submit.innerHTML = '<div class="loading-spinner" style="width:14px;height:14px;border-width:2px;"></div> Applying…';
+    const { ok, data } = await apiPost('/api/write', { arn: modal._arn, tags });
+    if (ok) {
+        showModalStatus('#fix-tags-status', '✅ Tags applied. Re-scanning so the table reflects the change…', 'success');
+        submit.textContent = 'Done';
+        submit.disabled = false;
+        submit.onclick = closeFixTagsModal;
+        toast('Tags applied', 'success');
+        setTimeout(triggerBackgroundRefresh, 800);
+    } else {
+        const details = (data.details || []).map(v => `${v.tag}: ${v.expected || v.type}`).join('; ');
+        showModalStatus('#fix-tags-status', `❌ ${data.message || 'Failed'}${details ? ' — ' + details : ''}`, 'error');
+        submit.disabled = false;
+        submit.textContent = 'Retry';
     }
 }
 
-function showFixTagsStatus(msg, type) {
-    const el = document.getElementById('fix-tags-status');
+function showModalStatus(sel, msg, type) {
+    const el = $(sel);
     if (!el) return;
     el.style.display = 'block';
     el.textContent = msg;
-    el.style.background = type === 'success'
-        ? 'rgba(52,211,153,0.12)'
-        : 'rgba(248,113,113,0.12)';
-    el.style.color = type === 'success' ? '#34d399' : '#f87171';
-    el.style.border = `1px solid ${type === 'success' ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`;
+    const good = type === 'success';
+    el.style.background = good ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)';
+    el.style.color = good ? '#34d399' : '#f87171';
+    el.style.border = `1px solid ${good ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`;
 }
+
+// ── Exemption modal ──────────────────────────────────────────────────
+
+function openExempt(r) {
+    const modal = $('#exempt-modal');
+    if (!modal || !r) return;
+    modal._arn = r.id;
+    $('#exempt-arn').textContent = r.id;
+    $('#exempt-reason').value = '';
+    const iso = d => d.toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000);
+    const expiry = $('#exempt-expiry');
+    expiry.min = iso(tomorrow);
+    expiry.value = iso(new Date(Date.now() + 30 * 86400000));
+    $('#exempt-status').style.display = 'none';
+    const submit = $('#exempt-submit');
+    submit.disabled = false;
+    submit.textContent = 'Create Exemption';
+    modal.style.display = 'flex';
+    modal.onclick = (e) => { if (e.target === modal) closeExemptModal(); };
+    setTimeout(() => $('#exempt-reason').focus(), 50);
+}
+
+function closeExemptModal() {
+    const modal = $('#exempt-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function exemptConfirm() {
+    const modal = $('#exempt-modal');
+    const reason = $('#exempt-reason').value.trim();
+    const expiry = $('#exempt-expiry').value;
+    if (!reason) return showModalStatus('#exempt-status', 'A reason is required.', 'error');
+    if (!expiry) return showModalStatus('#exempt-status', 'Pick an expiry date — exemptions should not be permanent.', 'error');
+    const submit = $('#exempt-submit');
+    submit.disabled = true;
+    const { ok, data } = await apiPost('/api/exemptions', {
+        resource_id: modal._arn, reason, expires_at: `${expiry}T23:59:59Z`,
+    });
+    if (!ok) {
+        submit.disabled = false;
+        return showModalStatus('#exempt-status', `❌ ${data.message || 'Failed to create exemption'}`, 'error');
+    }
+    toast('Exemption created', 'success');
+    closeExemptModal();
+    loadEnterpriseData();
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeFixTagsModal(); closeExemptModal(); hideTip(); }
+});
+
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(() => renderTrend(ent.history), 150);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const fromHash = (location.hash || '').slice(1);
+    const startBtn = document.querySelector(`.tab-btn[data-tab="${CSS.escape(fromHash)}"]`)
+        || document.getElementById('ent-tab-dashboard');
+    if (startBtn) startBtn.click();
+    loadEnterpriseData();
+});

@@ -58,6 +58,33 @@ DRIFT_AUTO_REVERT: bool = os.environ.get("DRIFT_AUTO_REVERT", "false").lower() =
 RBAC_ENABLED: bool = os.environ.get("RBAC_ENABLED", "false").lower() == "true"
 OBSERVABILITY_ENABLED: bool = os.environ.get("OBSERVABILITY_ENABLED", "true").lower() == "true"
 
+# ── Metrics ──────────────────────────────────────────────────────────
+# Prometheus /metrics is served when OBSERVABILITY_ENABLED=true.
+# CloudWatch EMF lines (stdout) are emitted when METRICS_EMF_ENABLED=true.
+METRICS_EMF_ENABLED: bool = os.environ.get("METRICS_EMF_ENABLED", "false").lower() == "true"
+METRICS_NAMESPACE: str = os.environ.get("METRICS_NAMESPACE", "TagGovernance")
+# Optional bearer token required to scrape /metrics (empty = open, rely on network controls)
+METRICS_AUTH_TOKEN: str = os.environ.get("METRICS_AUTH_TOKEN", "")
+
+# ── Compliance scanning ──────────────────────────────────────────────
+# Regions scanned by background/auto refresh: comma list, or "all". Empty = DEFAULT_REGION.
+COMPLIANCE_REGIONS: str = os.environ.get("COMPLIANCE_REGIONS", "")
+# Number of completed scans kept in SQLite (older scans and their resources are pruned)
+SCAN_RETENTION: int = max(1, int(os.environ.get("SCAN_RETENTION", "30")))
+# Server-side scheduled scans (web app): seconds between checks; 0 disables.
+# A scan runs when the cache is older than COMPLIANCE_CACHE_TTL_SECONDS.
+COMPLIANCE_SCAN_INTERVAL_SECONDS: int = int(os.environ.get("COMPLIANCE_SCAN_INTERVAL_SECONDS", "0"))
+
+# ── Auth ─────────────────────────────────────────────────────────────
+# Secure default: verify ALB OIDC unless explicitly set to local_dev.
+AUTH_MODE_DEFAULT: str = "alb_oidc"
+
+# ── MCP server ───────────────────────────────────────────────────────
+# When true, MCP write tools (write_tags, apply_governance, sync_tags) are refused.
+MCP_READ_ONLY: bool = os.environ.get("MCP_READ_ONLY", "false").lower() == "true"
+
+APP_VERSION: str = os.environ.get("APP_VERSION", "0.3.0")
+
 
 
 

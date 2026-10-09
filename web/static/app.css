@@ -11,6 +11,11 @@
       --danger: #ef4444;
       --success: #10b981;
       --warning: #f59e0b;
+      --card-bg: #0b1220;
+      --chart-surface: #0b1220;
+      --chart-series: #8b5cf6;       /* validated: dark L-band + >=3:1 vs --chart-surface */
+      --chart-series-wash: rgba(139, 92, 246, 0.10);
+      --chart-grid: rgba(255, 255, 255, 0.08);
       --radius: 16px;
       --font: "Outfit", "Inter", system-ui, sans-serif;
       --mono: "Fira Code", "IBM Plex Mono", monospace;
@@ -592,6 +597,12 @@
       border-color: rgba(239, 68, 68, 0.2);
     }
 
+    .status-badge.warn {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--warning);
+      border-color: rgba(245, 158, 11, 0.2);
+    }
+
     .status-badge.info {
       background: rgba(139, 92, 246, 0.1);
       color: #c4b5fd;
@@ -1066,4 +1077,84 @@
       padding: 2px 6px;
       font-size: 0.82rem;
       color: #c4b5fd;
+    }
+
+
+    /* ── Identity, banners, dashboard grids ─────────────────────────── */
+    .identity-badge {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 0.85rem; color: var(--muted);
+    }
+    .identity-badge .identity-user { color: var(--text); font-weight: 600; }
+
+    .banner {
+      padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 1.25rem;
+    }
+    .banner-warn {
+      background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); color: var(--text);
+    }
+
+    .dash-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+    .dash-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+    @media (max-width: 900px) {
+      .dash-grid-2, .dash-grid-3 { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    /* ── Charts ─────────────────────────────────────────────────────── */
+    .chart-card { background: var(--chart-surface); }
+    .chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .chart-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .chart-body { margin-top: 1rem; position: relative; }
+    .chart-empty { color: var(--muted); font-size: 0.85rem; padding: 1.5rem 0; text-align: center; }
+    .chart-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .chart-axis-text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+    .chart-label-text { fill: var(--text); font-size: 12px; font-weight: 600; font-family: var(--font); }
+
+    .hbar-list { display: flex; flex-direction: column; gap: 10px; }
+    .hbar-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; align-items: center; gap: 10px; font-size: 0.82rem; }
+    .hbar-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hbar-name small { color: var(--muted); }
+    .hbar-track { height: 14px; position: relative; }
+    .hbar-fill {
+      height: 14px; max-height: 24px; background: var(--chart-series);
+      border-radius: 0 4px 4px 0; min-width: 2px;
+    }
+    .hbar-value { color: var(--text); font-variant-numeric: tabular-nums; min-width: 3.5em; text-align: right; }
+    .hbar-row:hover .hbar-fill, .hbar-row:focus-within .hbar-fill { filter: brightness(1.15); }
+
+    .chart-tooltip {
+      position: fixed; z-index: 10000; pointer-events: none;
+      background: #111827; border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; line-height: 1.4;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); max-width: 280px;
+    }
+    .chart-tooltip .tt-muted { color: var(--muted); }
+
+    .trend-table { width: 100%; font-size: 0.82rem; margin-top: 1rem; }
+
+    /* ── Modals ─────────────────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);
+      z-index: 9999; align-items: center; justify-content: center;
+    }
+    .modal-panel {
+      background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px; padding: 2rem; width: min(560px, 92vw);
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    }
+
+    .tag-chip { display: inline-block; margin: 1px 2px; padding: 1px 6px; border-radius: 6px;
+      background: rgba(255,255,255,0.05); font-size: 0.72rem; color: var(--text); white-space: nowrap; }
+    .tag-chip b { color: var(--muted); font-weight: 500; }
+
+    /* ── Small screens ──────────────────────────────────────────────── */
+    .stats-bar { flex-wrap: wrap; }
+    @media (max-width: 640px) {
+      .app-container { padding: 1rem 16px; }
+      header { flex-wrap: wrap; gap: 0.75rem; }
+      .stat-card { min-width: 0; flex: 1 1 100%; }
+      .tabs { border-radius: 16px; flex-wrap: wrap; }
+      #compliance-status-bar { flex-wrap: wrap; gap: 0.75rem; }
+      .hbar-row { grid-template-columns: minmax(70px, 40%) 1fr auto; }
+      .modal-panel { padding: 1.25rem; }
     }

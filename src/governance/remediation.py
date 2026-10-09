@@ -146,6 +146,8 @@ class RemediationEngine:
         
         # 7. Audit Outcome
         insert_audit_log(actor, "REMEDIATE_FINISHED", arn, new_status, details={"action_id": action_id, "error_code": error_code}, request_id=request_id)
+        from src.observability.metrics import record_remediation
+        record_remediation(new_status)
         
         return self.state_store.get_remediation_action(action_id) or updates
 

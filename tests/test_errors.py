@@ -37,10 +37,10 @@ def test_incoming_request_id_preserved(client):
         assert response.get_json()["request_id"] == "my-custom-uuid"
 
 def test_aws_credentials_mapping(client):
-    """Missing AWS credentials map correctly."""
+    """Missing *server* AWS credentials are a 503, never a 401 (which would prompt the user to re-login)."""
     with patch("web.app.get_cached_report", side_effect=NoCredentialsError()):
         response = client.get("/api/dashboard")
-        assert response.status_code == 401
+        assert response.status_code == 503
         data = response.get_json()
         assert data["error_code"] == "INVALID_CREDENTIALS"
         assert "credentials" in data["message"].lower()

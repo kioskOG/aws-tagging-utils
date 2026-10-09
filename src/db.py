@@ -86,6 +86,10 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_finops_snapshots_timestamp ON finops_snapshots(timestamp);
         """)
+        # Additive migrations for databases created by older versions
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(compliance_resources)")}
+        if "warnings_json" not in cols:
+            conn.execute("ALTER TABLE compliance_resources ADD COLUMN warnings_json TEXT")
     logger.info("Database initialized at %s", DB_PATH)
 
 def insert_scan(report: Dict[str, Any], status: str = "COMPLETED") -> int:
@@ -116,20 +120,65 @@ def insert_scan(report: Dict[str, Any], status: str = "COMPLETED") -> int:
                 account = parts[4] if len(parts) > 4 else "unknown"
                 is_compliant = res.get("IsCompliant", False)
                 violations = json.dumps(res.get("Violations", []))
+                warnings = json.dumps(res.get("Warnings", []))
                 tags = json.dumps(res.get("Tags", {}))
                 
                 resources_to_insert.append((
                     scan_id, arn, region, account, res_type,
-                    is_compliant, violations, tags
+                    is_compliant, violations, tags, warnings
                 ))
         
         if resources_to_insert:
             conn.executemany("""
-                INSERT INTO compliance_resources (scan_id, arn, region, account, type, is_compliant, violations_json, tags_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO compliance_resources (scan_id, arn, region, account, type, is_compliant, violations_json, tags_json, warnings_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, resources_to_insert)
-            
+
+    prune_scans()
     return scan_id
+
+
+def prune_scans(keep: Optional[int] = None) -> int:
+    """Delete all but the newest `keep` scans (and their resources). Returns rows deleted."""
+    from src.config import SCAN_RETENTION
+    keep = keep or SCAN_RETENTION
+    conn = get_connection()
+    with conn:
+        old_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM compliance_scans ORDER BY id DESC LIMIT -1 OFFSET ?", (keep,))]
+        if not old_ids:
+            return 0
+        marks = ",".join("?" * len(old_ids))
+        conn.execute(f"DELETE FROM compliance_resources WHERE scan_id IN ({marks})", old_ids)
+        conn.execute(f"DELETE FROM compliance_scans WHERE id IN ({marks})", old_ids)
+    return len(old_ids)
+
+
+def get_scan_history(limit: int = 30) -> List[Dict[str, Any]]:
+    """Summary of the most recent completed scans, oldest first (for trend charts)."""
+    if not DB_PATH.exists():
+        return []
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, timestamp, regions, summary_json FROM compliance_scans
+            WHERE status = 'COMPLETED' ORDER BY id DESC LIMIT ?
+        """, (limit,)).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    out = []
+    for r in reversed(rows):
+        summary = json.loads(r["summary_json"] or "{}")
+        out.append({
+            "scan_id": r["id"],
+            "timestamp": r["timestamp"],
+            "regions": json.loads(r["regions"] or "[]"),
+            "total_resources": summary.get("total_resources", 0),
+            "compliant": summary.get("compliant", 0),
+            "non_compliant": summary.get("non_compliant", 0),
+            "compliance_score": summary.get("compliance_score", 0.0),
+        })
+    return out
 
 def get_latest_scan_report() -> Optional[Dict[str, Any]]:
     """Reconstruct a report dictionary from the latest successful database scan."""
@@ -164,7 +213,7 @@ def get_latest_scan_report() -> Optional[Dict[str, Any]]:
         }
         
         res_cursor = conn.execute("""
-            SELECT arn, region, is_compliant, violations_json, tags_json 
+            SELECT arn, region, is_compliant, violations_json, tags_json, warnings_json
             FROM compliance_resources 
             WHERE scan_id = ?
         """, (scan_id,))
@@ -179,7 +228,8 @@ def get_latest_scan_report() -> Optional[Dict[str, Any]]:
                 "ResourceARN": res_row["arn"],
                 "IsCompliant": bool(res_row["is_compliant"]),
                 "Violations": json.loads(res_row["violations_json"]) if res_row["violations_json"] else [],
-                "Tags": json.loads(res_row["tags_json"]) if res_row["tags_json"] else {}
+                "Tags": json.loads(res_row["tags_json"]) if res_row["tags_json"] else {},
+                "Warnings": json.loads(res_row["warnings_json"]) if res_row["warnings_json"] else [],
             }
             report["regions"][region]["resources"].append(res_info)
             
@@ -211,7 +261,7 @@ def get_recent_audit_logs(limit: int = 50) -> List[Dict[str, Any]]:
         cursor = conn.execute("""
             SELECT id, timestamp, actor, action, resource_arn, result, details_json, request_id
             FROM audit_log
-            ORDER BY timestamp DESC
+            ORDER BY id DESC
             LIMIT ?
         """, (limit,))
         

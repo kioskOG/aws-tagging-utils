@@ -1,6 +1,6 @@
 [project]
 name = "aws-tagging-utils"
-version = "0.2.0"
+version = "0.3.0"
 description = "AWS Tagging Utilities — MCP Server, Lambda handlers, and CLI for tag governance"
 readme = "README.md"
 license = {text = "MIT"}
@@ -12,6 +12,9 @@ dependencies = [
     "mcp>=0.1.0",
     "fastmcp>=0.1.0",
     "PyJWT[crypto]>=2.8.0",
+    "prometheus-client>=0.20",
+    "gunicorn>=22.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

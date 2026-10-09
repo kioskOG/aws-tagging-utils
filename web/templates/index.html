@@ -56,15 +56,8 @@
         <h1>AWS Tagging Utils</h1>
         <p>Enterprise Governance, FinOps &amp; Security</p>
       </div>
-      <div style="display: flex; gap: 1rem; align-items: center;">
-        <label style="margin: 0; color: var(--muted);">Role:</label>
-        <select id="user-role-select" style="width: auto; background: rgba(0,0,0,0.4); font-size: 0.85rem;" onchange="updateRBAC()">
-            <option value="PlatformAdmin">Platform Admin</option>
-            <option value="SecurityAdmin">Security Admin</option>
-            <option value="FinOps">FinOps</option>
-            <option value="ApplicationOwner">App Owner</option>
-            <option value="Viewer">Viewer</option>
-        </select>
+      <div id="identity-badge" class="identity-badge" title="Signed-in identity and roles (from the server)">
+        <span class="identity-user">Loading…</span>
       </div>
     </header>
 
@@ -121,7 +114,31 @@
           <div class="stat-sub">estimated attribution</div>
         </div></div>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;">
+      <div id="dash-failed-regions" class="banner banner-warn" style="display:none;"></div>
+      <div class="card chart-card" style="margin-bottom: 1.5rem;">
+        <div class="chart-head">
+          <div>
+            <div class="section-title" style="margin:0;">Compliance trend</div>
+            <div class="chart-sub">Compliance score per completed scan (%)</div>
+          </div>
+          <button class="btn-ghost" onclick="toggleTrendTable()" id="trend-table-toggle">View as table</button>
+        </div>
+        <div id="dash-trend" class="chart-body"><div class="chart-empty">No scans yet. Run a compliance refresh to start the trend.</div></div>
+        <div id="dash-trend-table" style="display:none;"></div>
+      </div>
+      <div class="dash-grid-2" style="margin-bottom: 1.5rem;">
+        <div class="card chart-card">
+          <div class="section-title">Top violations</div>
+          <div class="chart-sub">Resources affected, by tag and violation type</div>
+          <div id="dash-top-violations" class="chart-body"><div class="chart-empty">No violations in the latest scan.</div></div>
+        </div>
+        <div class="card chart-card">
+          <div class="section-title">Compliance by service</div>
+          <div class="chart-sub">Lowest first · % of resources compliant</div>
+          <div id="dash-by-service" class="chart-body"><div class="chart-empty">No resources in the latest scan.</div></div>
+        </div>
+      </div>
+      <div class="dash-grid-3">
         <div class="card">
           <div class="section-title">Resources</div>
           <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -158,15 +175,32 @@
           <option value="COMPLIANT">Compliant</option>
           <option value="NON_COMPLIANT">Non-Compliant</option>
         </select>
-        <input type="text" id="comp-filter-text" placeholder="Filter by resource ID or account..." style="flex: 1; font-size: 0.85rem;" oninput="filterComplianceTable()">
+        <select id="comp-filter-service" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">All Services</option>
+        </select>
+        <select id="comp-filter-region" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">All Regions</option>
+        </select>
+        <select id="comp-filter-issue" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">Any Issue</option>
+          <option value="MISSING_REQUIRED">Missing tag</option>
+          <option value="INVALID_VALUE">Invalid value</option>
+          <option value="INVALID_FORMAT">Invalid format</option>
+          <option value="NORMALIZATION_CONFLICT">Conflicting aliases</option>
+          <option value="UNKNOWN_TAG">Unknown tag</option>
+          <option value="EXEMPT">Exempted</option>
+        </select>
+        <input type="text" id="comp-filter-text" placeholder="Filter by ARN, account or tag value..." style="flex: 1; min-width: 200px; font-size: 0.85rem;" oninput="filterComplianceTable()">
+        <a class="btn btn-outline" href="/api/compliance/export.csv" style="padding: 8px 14px; font-size: 0.85rem; text-decoration:none;">⬇ Export CSV</a>
       </div>
+      <div id="comp-result-count" class="chart-sub" style="margin-bottom: 0.75rem;"></div>
       <div class="table-container">
         <table>
           <thead><tr>
             <th>Resource ID</th><th>Account</th><th>Type</th><th>Status</th>
-            <th>Missing Tags</th><th>Remediation</th><th>Actions</th>
+            <th>Tags</th><th>Issues</th><th>Exemption</th><th>Actions</th>
           </tr></thead>
-          <tbody id="compliance-table-body"><tr><td colspan="7" class="empty-state" style="text-align:center; padding: 2rem; color:var(--muted);">Loading compliance data...</td></tr></tbody>
+          <tbody id="compliance-table-body"><tr><td colspan="8" class="empty-state" style="text-align:center; padding: 2rem; color:var(--muted);">Loading compliance data...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -525,7 +559,7 @@
           max-height:85vh; overflow-y:auto; box-shadow:0 24px 64px rgba(0,0,0,0.6);
       ">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
-          <h2 style="margin:0;font-size:1.2rem;">🏷️ Fix Missing Tags</h2>
+          <h2 style="margin:0;font-size:1.2rem;">🏷️ Fix Tags</h2>
           <button class="btn-ghost" onclick="closeFixTagsModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
         </div>
 
@@ -540,7 +574,7 @@
         </div>
 
         <div style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;">
-          Enter values for each missing required tag:
+          Set a value for each tag that is missing or invalid. Other tags on the resource are not changed.
         </div>
 
         <div id="fix-tags-fields" style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;"></div>
@@ -556,7 +590,32 @@
 
   </div>
 
-  <script src="/static/app.js?v=5"></script>
+    <!-- ─── EXEMPTION MODAL ─────────────────────────────────────────────── -->
+    <div id="exempt-modal" class="modal-backdrop" style="display:none;">
+      <div class="modal-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+          <h2 style="margin:0;font-size:1.2rem;">🛡️ Exempt Resource</h2>
+          <button class="btn-ghost" onclick="closeExemptModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+        </div>
+        <div style="margin-bottom:1.25rem;">
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Resource ARN</div>
+          <code id="exempt-arn" style="font-size:0.78rem;color:var(--accent);word-break:break-all;"></code>
+        </div>
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">Reason <span style="color:var(--danger)">*</span></label>
+        <textarea id="exempt-reason" rows="3" maxlength="1000" placeholder="Why is this resource exempt? Link a ticket if possible." style="width:100%;margin-bottom:1rem;"></textarea>
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">Expires on <span style="color:var(--danger)">*</span></label>
+        <input id="exempt-expiry" type="date" style="width:100%;margin-bottom:1.25rem;">
+        <div id="exempt-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin-bottom:1rem;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button class="btn" onclick="closeExemptModal()" style="background:rgba(255,255,255,0.06);">Cancel</button>
+          <button id="exempt-submit" class="btn btn-primary" onclick="exemptConfirm()">Create Exemption</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="chart-tooltip" class="chart-tooltip" role="tooltip" style="display:none;"></div>
+
+  <script src="/static/app.js?v=6"></script>
 
 </body>
 

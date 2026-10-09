@@ -8,9 +8,14 @@ Run:
     mcp_server
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# stdio transport: stdout is the JSON-RPC channel, so logs and metrics must not use it.
+os.environ.setdefault("LOG_STREAM", "stderr")
+os.environ["METRICS_EMF_ENABLED"] = "false"
 
 from fastmcp import FastMCP
 
@@ -19,7 +24,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import DEFAULT_REGION
+from src.config import DEFAULT_REGION, MCP_READ_ONLY
 from src.logging_config import get_logger
 from src.tag_read import RESOURCE_TYPE_MAP, lambda_handler as read_handler
 from src.tag_writer import lambda_handler as write_handler
@@ -28,6 +33,13 @@ from src.tag_report import lambda_handler as report_handler
 from src.tag_sync import lambda_handler as sync_handler
 
 logger = get_logger(__name__)
+
+
+def _deny_if_read_only(tool: str) -> Optional[Dict[str, Any]]:
+    if MCP_READ_ONLY:
+        logger.warning("Refused %s: MCP_READ_ONLY is enabled", tool)
+        return {"statusCode": 403, "body": {"message": f"{tool} is disabled: the MCP server runs with MCP_READ_ONLY=true."}}
+    return None
 
 # Create MCP server
 mcp = FastMCP("AWS Tagging Utils")
@@ -93,6 +105,9 @@ def write_tags(
         tags: Dictionary of tags to apply (e.g., {"Owner": "DevOps"}).
         region: Default AWS region for the request.
     """
+    denied = _deny_if_read_only("write_tags")
+    if denied:
+        return denied
     logger.info("write_tags called", extra={"arn_count": len(arns), "aws_region": region})
     payload = {
         "arns": arns,
@@ -115,6 +130,9 @@ def apply_governance(
         region: Single region to scan (used if regions not provided).
         regions: List of regions to scan, or pass a single region.
     """
+    denied = _deny_if_read_only("apply_governance")
+    if denied:
+        return denied
     target = regions or [region]
     logger.info("apply_governance called", extra={"aws_region": target})
     payload = {"action": "scan", "regions": target}
@@ -169,6 +187,9 @@ def sync_tags(
         target_type: Type of sync operation. Currently only 'vpc_children' is supported.
         region: AWS region.
     """
+    denied = _deny_if_read_only("sync_tags")
+    if denied:
+        return denied
     # Extract VPC ID from ARN (e.g. arn:aws:ec2:us-east-2:123456:vpc/vpc-abc123)
     vpc_id = source_arn.split("/")[-1] if "/" in source_arn else source_arn
     logger.info("sync_tags called", extra={"aws_region": region, "resource_type": target_type})

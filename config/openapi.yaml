@@ -101,6 +101,98 @@ paths:
                 type: string
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+  /api/inventory/coverage:
+    get:
+      summary: Inventory coverage of the latest scan (never-tagged resources, unmapped resource types)
+      responses:
+        '200': {description: Coverage}
+  /api/leaderboard:
+    get:
+      summary: Compliance leaderboard with week-over-week change
+      parameters:
+        - {name: dimension, in: query, schema: {type: string, enum: [team, account, ou, service], default: team}}
+        - {name: compare_days, in: query, schema: {type: integer, default: 7}}
+      responses:
+        '200': {description: Ranked rows}
+  /api/me/resources:
+    get:
+      summary: Owner view — resources, violations, expiring exemptions and unallocated cost of the signed-in user
+      parameters:
+        - {name: owner, in: query, description: Admins only, view another owner, schema: {type: string}}
+        - {name: cost, in: query, description: "0 skips Cost Explorer", schema: {type: string}}
+      responses:
+        '200': {description: Owner view}
+        '403': {description: owner= used by a non-admin}
+  /api/organization/refresh:
+    post:
+      summary: Reload account names and OUs from AWS Organizations (admins)
+      responses:
+        '200': {description: Number of accounts}
+  /api/bulk/preview:
+    post:
+      summary: Preview a bulk tag change (diff + compliance before/after + preview_token)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arns: {type: array, items: {type: string}}
+                tags: {type: object, additionalProperties: {type: string}}
+                targets: {type: array, items: {type: object}}
+                overwrite: {type: boolean}
+      responses:
+        '200': {description: Preview}
+  /api/bulk/apply:
+    post:
+      summary: Apply a bulk tag change as an undoable change set
+      responses:
+        '201': {description: Change set}
+        '409': {description: PLAN_CHANGED — resources changed since the preview}
+  /api/changesets:
+    get:
+      summary: List change sets (newest first)
+      responses:
+        '200': {description: Change sets}
+  /api/changesets/{cs_id}:
+    get:
+      summary: Change set with per-resource before/after
+      parameters: [{name: cs_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Change set}
+        '404': {description: Not found}
+  /api/changesets/{cs_id}/undo:
+    post:
+      summary: Undo a change set (keys changed since are left alone and reported as conflicts)
+      parameters: [{name: cs_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '201': {description: Undo change set}
+        '409': {description: Already undone}
+  /api/suggestions:
+    post:
+      summary: Suggest tag values from related resources (same stack, EKS cluster, name prefix, account/service)
+      responses:
+        '200': {description: Per-resource and aggregate suggestions}
+  /api/propagation:
+    get:
+      summary: Propagation rules, latest check and its findings
+      responses:
+        '200': {description: Propagation state}
+  /api/propagation/run:
+    post:
+      summary: Start a propagation check in the background
+      responses:
+        '202': {description: Started}
+  /api/propagation/preview:
+    post:
+      summary: Preview fixing selected findings
+      responses:
+        '200': {description: Preview incl. config_changes}
+  /api/propagation/apply:
+    post:
+      summary: Fix selected findings as an undoable change set
+      responses:
+        '201': {description: Change set}
   /api/meta/resource-types:
     get:
       summary: Get supported resource types

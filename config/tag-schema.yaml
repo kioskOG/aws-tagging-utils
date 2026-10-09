@@ -26,6 +26,10 @@ tags:
   Application:
     description: "Name of the application"
     required: false
+
+  Team:
+    description: "Owning team (used by the compliance leaderboard, see TEAM_TAG_KEY)"
+    required: false
     
   DataClassification:
     description: "Sensitivity of the data stored"
@@ -49,6 +53,9 @@ normalization:
       - env
       - Env
       - environment
+  Team:
+    aliases:
+      - team
   Owner:
     aliases:
       - owner

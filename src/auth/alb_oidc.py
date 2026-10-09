@@ -114,7 +114,7 @@ def get_alb_identity(headers: Dict[str, str]) -> Optional[UserIdentity]:
         parts = dev_identity.split(":", 1)
         user_id = parts[0]
         roles = parts[1].split(",") if len(parts) > 1 else []
-        return UserIdentity(user_id=user_id, roles=roles)
+        return UserIdentity(user_id=user_id, roles=roles, email=os.environ.get("DEV_AUTH_EMAIL") or None)
         
     if auth_mode != "alb_oidc":
         logger.error(f"Unknown AUTH_MODE configuration: {auth_mode}")
@@ -151,7 +151,7 @@ def get_alb_identity(headers: Dict[str, str]) -> Optional[UserIdentity]:
             if group in role_mapping:
                 roles.append(role_mapping[group])
                 
-        return UserIdentity(user_id=user_id, roles=roles)
+        return UserIdentity(user_id=user_id, roles=roles, email=payload.get("email"))
         
     except APIError:
         raise

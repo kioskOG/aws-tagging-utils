@@ -299,7 +299,7 @@ const AWS_REGIONS = [
         $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
 
         // Enterprise views
-        const entViews = ['dashboard','compliance','finops','security','enforcement','organization','schema','cicd'];
+        const entViews = ['dashboard','compliance','mine','finops','security','enforcement','organization','propagation','changes','schema','cicd'];
         entViews.forEach(v => {
           const el = document.getElementById(`view-ent-${v}`);
           if (el) el.style.display = (tab === v) ? 'block' : 'none';
@@ -312,6 +312,7 @@ const AWS_REGIONS = [
         // Deep link: /#compliance etc. (replaceState: no history entry per click)
         if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
         if (tab === 'dashboard' && typeof renderTrend === 'function' && typeof ent !== 'undefined') renderTrend(ent.history);
+        if (typeof onEnterpriseTab === 'function') onEnterpriseTab(tab);
       };
     });
 
@@ -670,46 +671,55 @@ const AWS_REGIONS = [
       if (typeof applyPermissions === 'function') applyPermissions();
     }
 
-    document.getElementById('btn-sync').onclick = async () => {
-      const btn = document.getElementById('btn-sync');
-      const vpcId = document.getElementById('sync-vpc-id').value.trim();
-      if (!vpcId) return toast('VPC ID is required.', 'error');
+    async function runSync(dryRun) {
+      const btn = document.getElementById(dryRun ? 'btn-sync-preview' : 'btn-sync');
+      const parent = document.getElementById('sync-vpc-id').value.trim();
+      if (!parent) return toast('Parent ID, name or ARN is required.', 'error');
+      const rule = document.getElementById('sync-rule').value;
       const reg = (state.regions['sync'] || []).filter(r => r !== 'all')[0] || state.defaultRegion;
+      const label = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags…';
+      btn.innerHTML = '<div class="loading-spinner"></div>';
       try {
-        const { ok, data } = await apiPost('/api/sync', { action: 'sync_vpc', vpc_id: vpcId, region: reg });
-        if (!ok) { renderApiError('VPC tag sync failed', data); return; }
+        const { ok, data } = await apiPost('/api/sync', {
+          action: 'propagate', rule, parent, region: reg,
+          overwrite: document.getElementById('sync-overwrite').checked, dry_run: dryRun,
+        });
+        if (!ok) { renderApiError('Tag propagation failed', data); return; }
         document.getElementById('output').textContent = JSON.stringify(data, null, 2);
         document.getElementById('toggle-json').style.display = 'block';
-        renderSyncResults(data, vpcId);
+        renderSyncResults(data, parent, dryRun);
       } catch (e) { toast('Sync failed: ' + e.message, 'error'); }
-      finally { btn.disabled = false; btn.innerHTML = 'Propagate VPC Tags'; }
-    };
+      finally { btn.disabled = false; btn.innerHTML = label; }
+    }
+    document.getElementById('btn-sync').onclick = () => runSync(false);
+    document.getElementById('btn-sync-preview').onclick = () => runSync(true);
 
-    function renderSyncResults(data, vpcId) {
-      const updated = data.updated_resources || [];
-      let html = `<div class="section-title" style="margin-bottom:1.5rem">VPC Tag Propagation — <code style="font-size:0.85rem;color:#a78bfa">${vpcId}</code></div>`;
-      if (data.error) {
-        html += `<div style="padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;color:var(--danger)">Error: ${data.error}</div>`;
+    function renderSyncResults(data, parent, dryRun) {
+      const findings = data.findings || [];
+      const tagFindings = findings.filter(f => f.kind === 'tags');
+      const configFindings = findings.filter(f => f.kind === 'config');
+      let html = `<div class="section-title" style="margin-bottom:1rem">${dryRun ? 'Preview' : 'Result'} — ${escapeHtml(data.rule)} <code style="font-size:0.85rem;color:#a78bfa">${escapeHtml(parent)}</code></div>`;
+      if (!findings.length) {
+        html += `<div class="card" style="color:var(--success)">✓ ${escapeHtml(data.message || 'Every child already carries the parent\'s tags.')}</div>`;
       } else {
-        html += `<div class="score-ring" style="margin-bottom:1.5rem">
-          <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(217,70,239,0.2));border:2px solid rgba(139,92,246,0.4);display:flex;align-items:center;justify-content:center;flex-direction:column">
-            <span style="font-size:1.5rem;font-weight:700;color:#e879f9">${updated.length}</span>
-          </div>
-          <div class="score-meta"><h3 style="color:#e879f9">Resources Updated</h3><p>Tags propagated from <b>${vpcId}</b> to all child network resources.</p></div>
-        </div>`;
-        if (updated.length) {
-          html += `<div class="sync-resource-list">${updated.map(a => `• ${a}`).join('<br>')}</div>`;
-        } else {
-          html += `<div style="color:var(--muted);font-size:0.85rem;padding:1rem">No child resources were found or updated.</div>`;
-        }
-        if (data.errors && data.errors.length) {
-          html += `<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:#fca5a5">${data.errors.join('<br>')}</div></div>`;
-        }
+        html += `<div class="table-container"><table class="preview-table"><thead><tr><th>Child</th><th>Missing</th><th>Mismatched</th></tr></thead><tbody>
+          ${tagFindings.map(f => `<tr><td class="arn-cell">${escapeHtml(f.child_arn)}<div class="chart-sub">${escapeHtml(f.child_type)}</div></td>
+            <td>${Object.entries(f.missing || {}).map(([k, v]) => `<span class="tag-chip diff-add"><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join('') || '-'}</td>
+            <td>${Object.entries(f.mismatched || {}).map(([k, v]) => `<span class="tag-chip diff-change"><b>${escapeHtml(k)}</b> ${escapeHtml(v.actual)} → ${escapeHtml(v.expected)}</span>`).join('') || '-'}</td></tr>`).join('')}
+          ${configFindings.map(f => `<tr><td colspan="3"><span class="status-badge warn">${escapeHtml(f.issue)}</span> ${escapeHtml(f.detail)}</td></tr>`).join('')}
+        </tbody></table></div>`;
+      }
+      if (!dryRun && data.change_set_id) {
+        html += `<div class="card" style="margin-top:1rem">Change set <code>${escapeHtml(data.change_set_id)}</code> — ${escapeHtml(data.status)}.
+          <button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escapeHtml(data.change_set_id)}')">Undo</button></div>`;
+      }
+      if (data.errors && data.errors.length) {
+        html += `<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:#fca5a5">${data.errors.map(escapeHtml).join('<br>')}</div></div>`;
       }
       document.getElementById('result-content').innerHTML = html;
-      toast(data.error ? 'Sync failed.' : `Propagated tags to ${updated.length} resources.`, data.error ? 'error' : 'success');
+      const n = (data.updated_resources || []).length;
+      toast(dryRun ? `${tagFindings.length} children would change` : `Propagated tags to ${n} resources.`, 'success');
     }
 
     // Replace alerts with toasts
@@ -821,6 +831,10 @@ const ent = {
     history: [],
     polling: null,
     autoRefreshTried: false,
+    selected: new Set(),
+    mine: null,
+    lbDim: 'team',
+    prop: { run: null, selected: new Set(), polling: null },
 };
 const COMPLIANCE_PAGE_SIZE = 50;
 const FIXABLE = new Set(['MISSING_REQUIRED', 'INVALID_VALUE', 'INVALID_FORMAT']);
@@ -895,7 +909,7 @@ function applyPermissions() {
     legacyWriteButtons.forEach(sel => { const el = $(sel); if (el) el.dataset.perm = 'modify_tags'; });
     $$('[data-perm]').forEach(el => {
         const allowed = ent.me === null ? true : can(el.dataset.perm);
-        el.disabled = !allowed;
+        el.disabled = !allowed || el.dataset.empty === '1';
         el.style.opacity = allowed ? '' : '0.35';
         el.title = allowed ? (el.dataset.title || '') : 'Your role does not allow this action';
     });
@@ -933,8 +947,10 @@ async function loadEnterpriseData() {
         await loadSchema();
         await Promise.allSettled([
             loadDashboard(), loadCompliance(), loadHistory(), loadFinops(),
-            loadRemediation(), loadExemptions(), loadAudit(),
+            loadRemediation(), loadExemptions(), loadAudit(), loadCoverage(),
+            loadLeaderboard(), loadOrganization(), loadChanges(), loadPropagation(),
         ]);
+        if (ent.mine !== null) loadMine();
         renderStaticUnavailable();
         applyPermissions();
         await checkRefreshStatus();
@@ -1013,7 +1029,7 @@ async function loadCompliance() {
     const comp = await safeFetch('/api/compliance?include_exemptions=1');
     if (comp._error) {
         ent.resources = [];
-        showUnavailable('#compliance-table-body', 8, comp.message || 'Failed to load compliance data.');
+        showUnavailable('#compliance-table-body', 9, comp.message || 'Failed to load compliance data.');
         return;
     }
     ent.resources = comp.resources || [];
@@ -1168,7 +1184,6 @@ function renderStaticUnavailable() {
     ['#dash-drift', '#dash-reverted', '#dash-pending-sec', '#sec-protected', '#sec-unauth', '#sec-reverted', '#sec-pending']
         .forEach(id => setText(id, 'N/A'));
     showUnavailable('#drift-table-body', 8, 'Protected-tag drift detection requires AWS Config and the DynamoDB state table.');
-    showUnavailable('#org-table-body', 6, 'Organization view requires AWS Organizations integration (see docs/MULTI_ACCOUNT.md).');
     showUnavailable('#cicd-table-body', 6, 'CI/CD results come from the CLI: ./aws-tagging-utils validate <dir> --format sarif');
 }
 
@@ -1329,7 +1344,8 @@ function filterComplianceTable(keepPage = false) {
         if (region && r.region !== region) return false;
         if (issue === 'EXEMPT' && r.exemption_state !== 'EXEMPT') return false;
         if (issue === 'UNKNOWN_TAG' && !(r.warnings || []).some(w => w.type === 'UNKNOWN_TAG')) return false;
-        if (issue && issue !== 'EXEMPT' && issue !== 'UNKNOWN_TAG' && !(r.violations || []).some(v => v.type === issue)) return false;
+        if (issue === 'NEVER_TAGGED' && !r.never_tagged) return false;
+        if (issue && !['EXEMPT', 'UNKNOWN_TAG', 'NEVER_TAGGED'].includes(issue) && !(r.violations || []).some(v => v.type === issue)) return false;
         if (text) {
             const hay = [r.id, r.account, r.region, ...Object.entries(r.tags || {}).map(([k, v]) => `${k}=${v}`)].join(' ').toLowerCase();
             if (!hay.includes(text)) return false;
@@ -1361,13 +1377,13 @@ function renderCompliancePage(page) {
     const countEl = $('#comp-result-count');
 
     if (!ent.resources.length) {
-        showUnavailable('#compliance-table-body', 8, 'No resources found. Run a compliance refresh, or check AWS credentials and the scanned regions.');
+        showUnavailable('#compliance-table-body', 9, 'No resources found. Run a compliance refresh, or check AWS credentials and the scanned regions.');
         if (countEl) countEl.textContent = '';
         renderPagination(0, 0);
         return;
     }
     if (!rows.length) {
-        showUnavailable('#compliance-table-body', 8, 'No resources match these filters.');
+        showUnavailable('#compliance-table-body', 9, 'No resources match these filters.');
         if (countEl) countEl.textContent = `0 of ${ent.resources.length} resources`;
         renderPagination(0, 0);
         return;
@@ -1393,8 +1409,10 @@ function renderCompliancePage(page) {
         const exemptCell = exempt
             ? `<span class="status-badge info">Exempt</span>${r.exemption_expires_at ? `<div class="chart-sub">until ${escHtml(new Date(r.exemption_expires_at).toLocaleDateString())}</div>` : ''}`
             : (r.exemption_state === 'Unknown' ? '<span class="chart-sub" title="The exemption store (DynamoDB) could not be read">unavailable</span>' : '-');
+        const checked = ent.selected.has(r.id) ? 'checked' : '';
         return `<tr>
-            <td class="arn-cell">${escHtml(r.id)}<div class="chart-sub">${escHtml(r.region)}</div></td>
+            <td><input type="checkbox" class="comp-check" data-arn="${escHtml(r.id)}" ${checked}></td>
+            <td class="arn-cell">${escHtml(r.id)}<div class="chart-sub">${escHtml(r.region)}${r.never_tagged ? ' · <span class="status-badge badge-never" title="Found by Resource Explorer; never had a tag">never tagged</span>' : ''}</div></td>
             <td>${escHtml(r.account)}</td>
             <td><span class="status-badge info">${escHtml(r.type)}</span></td>
             <td><span class="status-badge ${r.status === 'COMPLIANT' ? 'ok' : 'err'}">${escHtml(r.status)}</span></td>
@@ -1405,8 +1423,47 @@ function renderCompliancePage(page) {
         </tr>`;
     }).join('');
     renderPagination(ent.page, totalPages);
+    const pageBox = $('#comp-select-page');
+    if (pageBox) pageBox.checked = slice.length > 0 && slice.every(r => ent.selected.has(r.id));
+    updateBulkCount();
     applyPermissions();
 }
+
+// ── Bulk selection ───────────────────────────────────────────────────
+
+function updateBulkCount() {
+    const n = ent.selected.size;
+    setText('#bulk-selected-count', `${n.toLocaleString()} selected`);
+    const btn = $('#btn-bulk-fix');
+    if (btn) btn.dataset.empty = n ? '' : '1';
+    applyPermissions();
+    if (btn && !n) btn.disabled = true;
+}
+
+function selectPage(on) {
+    $$('#compliance-table-body .comp-check').forEach(cb => {
+        cb.checked = on;
+        on ? ent.selected.add(cb.dataset.arn) : ent.selected.delete(cb.dataset.arn);
+    });
+    updateBulkCount();
+}
+
+function selectAllFiltered(on) {
+    if (on) ent.filtered.forEach(r => ent.selected.add(r.id));
+    else ent.selected.clear();
+    renderCompliancePage(ent.page);
+}
+
+document.addEventListener('change', (e) => {
+    if (e.target.classList && e.target.classList.contains('comp-check')) {
+        e.target.checked ? ent.selected.add(e.target.dataset.arn) : ent.selected.delete(e.target.dataset.arn);
+        updateBulkCount();
+    }
+    if (e.target.classList && e.target.classList.contains('prop-check')) {
+        e.target.checked ? ent.prop.selected.add(e.target.dataset.id) : ent.prop.selected.delete(e.target.dataset.id);
+        setText('#prop-selected', `${ent.prop.selected.size} selected`);
+    }
+});
 
 function renderPagination(page, totalPages) {
     const tbody = $('#compliance-table-body');
@@ -1637,10 +1694,464 @@ async function exemptConfirm() {
     loadEnterpriseData();
 }
 
+// ── Inventory coverage (#1, #6) ──────────────────────────────────────
+
+async function loadCoverage() {
+    const c = await safeFetch('/api/inventory/coverage');
+    const body = $('#dash-coverage-body');
+    if (c._error) {
+        if (body) body.innerHTML = `<div class="chart-empty">${escHtml(c.message || 'Coverage unavailable')}</div>`;
+        return;
+    }
+    const source = c.inventory_source === 'resource_explorer' ? 'Resource Explorer + tagging API' : 'Tagging API only';
+    setText('#dash-coverage-sub', `Source: ${source}`);
+    if (body) {
+        const cell = (value, label, tip) => `<div title="${escHtml(tip || '')}"><div class="cov-value">${escHtml(value)}</div><div class="cov-label">${escHtml(label)}</div></div>`;
+        body.innerHTML =
+            cell(c.inventory_source === 'resource_explorer' ? c.never_tagged.toLocaleString() : 'not visible',
+                 'never-tagged resources', c.inventory_source === 'resource_explorer'
+                     ? 'Found by Resource Explorer, never had a tag (counted as non-compliant)'
+                     : 'The tagging API cannot see resources that were never tagged. Set INVENTORY_SOURCE=resource_explorer.') +
+            cell(c.unmapped_resources.toLocaleString(), 'resources not evaluated', 'Discovered types outside RESOURCE_TYPE_MAP') +
+            cell(c.unmapped_types.length.toLocaleString(), 'unmapped resource types', c.unmapped_types.slice(0, 8).map(t => t.resource_type).join(', ')) +
+            cell(c.mapped_types.length.toLocaleString(), 'resource types evaluated', '');
+        if (c.warnings && c.warnings.length) {
+            body.innerHTML += `<div class="banner banner-warn" style="grid-column:1/-1;margin:0">${c.warnings.map(escHtml).join('<br>')}</div>`;
+        }
+    }
+    const hint = $('#coverage-hint');
+    if (hint) hint.textContent = c.hint || '';
+    const tbody = $('#coverage-table-body');
+    if (tbody) {
+        tbody.innerHTML = c.unmapped_types.length
+            ? c.unmapped_types.map(t => `<tr><td><code>${escHtml(t.resource_type)}</code></td><td>${escHtml(t.count)}</td></tr>`).join('')
+            : `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:1.5rem">Every discovered resource type is evaluated.</td></tr>`;
+    }
+}
+
+// ── My resources (#4) ────────────────────────────────────────────────
+
+async function loadMine() {
+    const owner = ($('#mine-owner') || {}).value || '';
+    const url = '/api/me/resources' + (owner.trim() ? `?owner=${encodeURIComponent(owner.trim())}` : '');
+    const m = await safeFetch(url);
+    if ($('#mine-admin')) $('#mine-admin').style.display = can('manage_exemptions') ? 'flex' : 'none';
+    if (m._error) {
+        showUnavailable('#mine-table-body', 5, m.message || 'Could not load your resources.');
+        return;
+    }
+    ent.mine = m;
+    setText('#mine-identity', `Resources whose ${'Owner'} tag matches ${m.identifiers.join(' or ') || 'you'}` +
+        (m.owner_values.length ? ` (values: ${m.owner_values.slice(0, 3).join(', ')}${m.owner_values.length > 3 ? '…' : ''})` : ''));
+    setText('#mine-total', m.summary.total.toLocaleString());
+    setText('#mine-pct', `${m.summary.compliance_pct}% compliant`);
+    setText('#mine-noncomp', m.summary.non_compliant.toLocaleString());
+    setText('#mine-expiring', m.exemptions_error ? 'N/A' : m.summary.exemptions_expiring.toLocaleString());
+    const note = $('#mine-cost-note');
+    if (m.cost) {
+        setText('#mine-unalloc', `${m.cost.unallocated_share_pct}%`);
+        setText('#mine-cost-sub', `${fmtMoney(m.cost.unallocated_spend)} of ${fmtMoney(m.cost.owned_spend)} has no ${m.cost.cost_allocation_tag}`);
+        if (note) note.style.display = 'none';
+    } else {
+        setText('#mine-unalloc', 'N/A');
+        if (note) {
+            note.style.display = m.cost_error ? 'block' : 'none';
+            note.textContent = m.cost_error || '';
+        }
+    }
+    const max = Math.max(1, ...m.violations.map(v => v.count));
+    renderHBars('#mine-violations', m.violations.slice(0, 6).map(v => ({
+        name: `${v.tag} ${v.type}`,
+        label: `${escHtml(v.tag)} <small>${escHtml(VIOLATION_LABEL[v.type] || v.type)}</small>`,
+        pct: v.count / max * 100, value: v.count.toLocaleString(),
+        tip: `<b>${escHtml(v.tag)}</b> · ${escHtml(VIOLATION_LABEL[v.type] || v.type)}<br>${escHtml(v.count)} of your resources`,
+    })), 'None of your resources have violations. 🎉');
+    const ex = $('#mine-exemptions');
+    if (ex) {
+        ex.innerHTML = m.exemptions_error ? `<div class="chart-empty">${escHtml(m.exemptions_error)}</div>`
+            : m.expiring_exemptions.length ? m.expiring_exemptions.map(e => `<div class="chip" style="margin:4px 0;display:flex">
+                <b>${escHtml(e.days_left)}d</b> ${escHtml(e.reason || 'no reason')} · ${escHtml(e.resources.length)} resource(s)</div>`).join('')
+            : '<div class="chart-empty">Nothing expiring in the next weeks.</div>';
+    }
+    setText('#mine-count', `${m.resources.length} resources`);
+    const tbody = $('#mine-table-body');
+    if (tbody) {
+        tbody.innerHTML = m.resources.length ? m.resources.map(r => `<tr>
+            <td class="arn-cell">${escHtml(r.id)}<div class="chart-sub">${escHtml(r.region)}</div></td>
+            <td><span class="status-badge info">${escHtml(r.type)}</span></td>
+            <td><span class="status-badge ${r.status === 'COMPLIANT' ? 'ok' : 'err'}">${escHtml(r.status)}</span></td>
+            <td>${renderTagsCell(r.tags)}</td>
+            <td>${renderIssuesCell(r.violations, r.warnings)}</td></tr>`).join('')
+            : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">No resources carry your identity in ${escHtml('Owner')}. Ask an admin to tag them, or check DEV_AUTH_EMAIL / the ALB email claim.</td></tr>`;
+    }
+    applyPermissions();
+}
+
+function mineNonCompliant() {
+    return ent.mine ? ent.mine.resources.filter(r => r.status !== 'COMPLIANT').map(r => r.id) : [];
+}
+
+// ── Leaderboard (#3, #5) ─────────────────────────────────────────────
+
+async function loadLeaderboard() {
+    const lb = await safeFetch(`/api/leaderboard?dimension=${encodeURIComponent(ent.lbDim)}`);
+    $$('#lb-dimension button').forEach(b => b.classList.toggle('active', b.dataset.dim === ent.lbDim));
+    const tbody = $('#lb-table-body');
+    if (lb._error) { showUnavailable('#lb-table-body', 6, lb.message || 'Leaderboard unavailable'); return; }
+    setText('#lb-compared', lb.compared_to ? `Change vs scan of ${fmtDate(lb.compared_to)}` : 'Week-over-week appears once a scan 7+ days old exists');
+    const improved = $('#lb-improved');
+    if (improved) improved.innerHTML = (lb.most_improved || []).filter(r => r.delta > 0)
+        .map(r => `<span class="chip">📈 <b>${escHtml(r.name)}</b> +${escHtml(r.delta)} pts</span>`).join('');
+    if (!lb.rows.length) { showUnavailable('#lb-table-body', 6, 'No scan yet.'); return; }
+    const delta = d => d === null || d === undefined ? '<span class="delta-flat">—</span>'
+        : d > 0 ? `<span class="delta-up">▲ ${d}</span>` : d < 0 ? `<span class="delta-down">▼ ${Math.abs(d)}</span>` : '<span class="delta-flat">0</span>';
+    tbody.innerHTML = lb.rows.map(r => `<tr>
+        <td>${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : escHtml(r.rank)}</td>
+        <td class="name-cell">${escHtml(r.name)}${r.name !== r.key ? `<div class="chart-sub">${escHtml(r.key)}${r.ou ? ' · ' + escHtml(r.ou) : ''}</div>` : ''}</td>
+        <td><div class="meter"><div class="meter-track"><div class="meter-fill" style="width:${r.compliance_pct}%"></div></div><span>${escHtml(r.compliance_pct)}%</span></div></td>
+        <td>${delta(r.delta)}</td>
+        <td>${escHtml(r.total.toLocaleString())}</td>
+        <td>${escHtml(r.non_compliant.toLocaleString())}</td></tr>`).join('');
+}
+
+document.addEventListener('click', (e) => {
+    const b = e.target.closest('#lb-dimension button');
+    if (b) { ent.lbDim = b.dataset.dim; loadLeaderboard(); }
+});
+
+async function loadOrganization() {
+    const o = await safeFetch('/api/organization');
+    if (o._error) { showUnavailable('#org-table-body', 5, o.message || 'Accounts unavailable'); return; }
+    if (!o.accounts.length) { showUnavailable('#org-table-body', 5, 'No scan yet.'); return; }
+    $('#org-table-body').innerHTML = o.accounts.map(a => {
+        const errs = Object.entries(a.errors || {});
+        return `<tr><td class="name-cell">${escHtml(a.name)}${a.name !== a.account_id ? `<div class="chart-sub">${escHtml(a.account_id)}</div>` : ''}</td>
+            <td>${escHtml(a.ou || '-')}</td><td>${escHtml(a.compliance_pct)}%</td><td>${escHtml(a.total)}</td>
+            <td>${errs.length ? errs.map(([r, m]) => `<div class="chart-sub" title="${escHtml(m)}">⚠ ${escHtml(r)}: ${escHtml(String(m).slice(0, 80))}</div>`).join('') : '-'}</td></tr>`;
+    }).join('') + (o.multi_account || o.accounts.length > 1 ? '' : `<tr><td colspan="5" class="chart-sub" style="padding:1rem">Single-account mode. Set COMPLIANCE_ACCOUNTS=all (or a list) and deploy the governance role StackSet to scan the Organization.</td></tr>`);
+}
+
+async function refreshOrgDirectory() {
+    const r = await safeFetch('/api/organization/refresh', { method: 'POST' });
+    if (r._error) return toast(r.message || 'Organizations directory unavailable', 'error');
+    toast(`Loaded ${r.accounts} accounts from AWS Organizations`, 'success');
+    loadOrganization(); loadLeaderboard();
+}
+
+// ── Change sets (#2) ─────────────────────────────────────────────────
+
+const CS_BADGE = { APPLIED: 'ok', NO_CHANGE: 'info', PARTIAL: 'warn', FAILED: 'err', UNDONE: 'info', UNDO_PARTIAL: 'warn' };
+
+async function loadChanges() {
+    const c = await safeFetch('/api/changesets?limit=100');
+    if (c._error) { showUnavailable('#changes-table-body', 7, c.message || 'Change sets unavailable'); return; }
+    if (!c.change_sets.length) { showUnavailable('#changes-table-body', 7, 'No changes yet. Bulk fixes and propagation fixes appear here.'); return; }
+    $('#changes-table-body').innerHTML = c.change_sets.map(cs => {
+        const sm = cs.summary || {};
+        const result = ['SUCCESS', 'FAILED', 'INVALID', 'CONFLICT', 'NO_CHANGE'].filter(k => sm[k])
+            .map(k => `<span class="tag-chip"><b>${escHtml(k.toLowerCase().replace('_', ' '))}</b> ${escHtml(sm[k])}</span>`).join('');
+        const undoable = !cs.undo_of && !cs.undone_by && ['APPLIED', 'PARTIAL'].includes(cs.status);
+        return `<tr>
+            <td style="font-size:0.8rem">${escHtml(fmtDate(cs.created_at))}</td>
+            <td class="name-cell">${escHtml(cs.actor || '-')}</td>
+            <td><span class="status-badge info">${escHtml(cs.kind)}</span></td>
+            <td style="font-size:0.85rem">${escHtml(cs.description || '')}<div class="chart-sub">${escHtml(cs.id)}${cs.undo_of ? ' · undoes ' + escHtml(cs.undo_of) : ''}${cs.undone_by ? ' · undone by ' + escHtml(cs.undone_by) : ''}</div></td>
+            <td>${result || '-'}</td>
+            <td><span class="status-badge ${CS_BADGE[cs.status] || 'info'}">${escHtml(cs.status)}</span></td>
+            <td style="white-space:nowrap"><button class="btn-ghost" onclick="viewChangeSet('${escHtml(cs.id)}')">View</button>
+                ${undoable ? `<button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escHtml(cs.id)}')">Undo</button>` : ''}</td></tr>`;
+    }).join('');
+    applyPermissions();
+}
+
+async function undoChangeSet(id) {
+    if (!confirm(`Undo change set ${id}? Keys changed by someone else since will be left alone.`)) return;
+    const r = await safeFetch(`/api/changesets/${encodeURIComponent(id)}/undo`, { method: 'POST' });
+    if (r._error) return toast(r.message || 'Undo failed', 'error');
+    const conflicts = (r.items || []).filter(i => i.conflicts && Object.keys(i.conflicts).length).length;
+    toast(conflicts ? `Undone with ${conflicts} conflict(s) left as-is` : 'Change set undone', conflicts ? 'error' : 'success');
+    loadChanges();
+    setTimeout(triggerBackgroundRefresh, 500);
+}
+
+async function viewChangeSet(id) {
+    const cs = await safeFetch(`/api/changesets/${encodeURIComponent(id)}`);
+    if (cs._error) return toast(cs.message || 'Not found', 'error');
+    openChangeModal({ title: `Change set ${cs.id}`, formHtml: `<div class="chart-sub">${escHtml(cs.description || '')} · ${escHtml(cs.actor)} · ${escHtml(fmtDate(cs.created_at))} · ${escHtml(cs.status)}</div>` });
+    $('#change-preview').innerHTML = renderChangeItems(cs.items, true);
+    $('#change-preview-btn').style.display = 'none';
+    $('#change-apply-btn').style.display = 'none';
+}
+
+// ── Shared change modal: preview → apply → undo ──────────────────────
+
+let _changeCtx = null;
+
+function openChangeModal({ title, formHtml, onPreview, onApply }) {
+    _changeCtx = { onPreview, onApply, token: null };
+    setText('#change-title', title);
+    $('#change-form').innerHTML = formHtml || '';
+    $('#change-preview').innerHTML = '';
+    $('#change-status').style.display = 'none';
+    const pv = $('#change-preview-btn'), ap = $('#change-apply-btn');
+    pv.style.display = onPreview ? '' : 'none';
+    ap.style.display = onApply ? '' : 'none';
+    pv.disabled = false; pv.textContent = 'Preview';
+    ap.disabled = true; ap.textContent = 'Apply';
+    pv.onclick = doChangePreview;
+    ap.onclick = doChangeApply;
+    const modal = $('#change-modal');
+    modal.style.display = 'flex';
+    modal.onclick = (e) => { if (e.target === modal) closeChangeModal(); };
+}
+
+function closeChangeModal() {
+    const m = $('#change-modal');
+    if (m) m.style.display = 'none';
+    _changeCtx = null;
+}
+
+function renderChangeItems(items, applied) {
+    if (!items || !items.length) return '<div class="chart-empty">Nothing to change.</div>';
+    const rows = items.map(it => {
+        if (it.op && it.op !== 'tags') {
+            return `<tr><td class="arn-cell">${escHtml(it.target || '')}</td><td colspan="2"><span class="status-badge warn">${escHtml(it.op)}</span>
+                ${escHtml(Object.keys(it.tags || {}).join(', ') || it.service || '')}</td><td>${escHtml(it.result || 'planned')}${it.error ? ' · ' + escHtml(it.error) : ''}</td></tr>`;
+        }
+        const changes = it.changes || Object.fromEntries(Object.keys(it.after || {}).map(k => [k, { before: (it.before || {})[k], after: it.after[k] }]));
+        const parts = Object.entries(changes).map(([k, c]) => c.before === null || c.before === undefined
+            ? `<span class="tag-chip diff-add">+ <b>${escHtml(k)}</b> ${escHtml(c.after)}</span>`
+            : `<span class="tag-chip diff-change"><b>${escHtml(k)}</b> ${escHtml(c.before)} → ${escHtml(c.after)}</span>`);
+        (it.removed || []).forEach(k => parts.push(`<span class="tag-chip diff-skip">− <b>${escHtml(k)}</b></span>`));
+        Object.entries(it.skipped || {}).forEach(([k, v]) => parts.push(`<span class="tag-chip diff-skip" title="exists; enable overwrite to replace"><b>${escHtml(k)}</b> ${escHtml(v.current)}</span>`));
+        Object.entries(it.conflicts || {}).forEach(([k, v]) => parts.push(`<span class="tag-chip diff-change" title="changed by someone else; left alone">⚠ <b>${escHtml(k)}</b> now ${escHtml(v.current)}</span>`));
+        let status;
+        if (applied) status = `<span class="status-badge ${it.result === 'SUCCESS' ? 'ok' : it.result === 'NO_CHANGE' ? 'info' : 'err'}">${escHtml(it.result)}</span>${it.error ? `<div class="chart-sub">${escHtml(it.error)}</div>` : ''}`;
+        else if (it.invalid && it.invalid.length) status = `<span class="status-badge err">invalid</span><div class="chart-sub">${it.invalid.map(v => escHtml(`${v.tag}: ${v.expected || v.type}`)).join('<br>')}</div>`;
+        else status = `${it.compliant_before ? '✅' : '❌'} → ${it.compliant_after ? '✅' : '❌'}${!it.compliant_after && it.remaining_violations && it.remaining_violations.length ? `<div class="chart-sub">still: ${it.remaining_violations.map(v => escHtml(v.tag)).join(', ')}</div>` : ''}`;
+        return `<tr><td class="arn-cell">${escHtml(it.arn)}</td><td colspan="2">${parts.join('') || '<span class="chart-sub">no change</span>'}</td><td>${status}</td></tr>`;
+    }).join('');
+    return `<div class="table-container" style="max-height:50vh;overflow:auto"><table class="preview-table">
+        <thead><tr><th>Resource</th><th colspan="2">Changes</th><th>${applied ? 'Result' : 'Compliant before → after'}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function doChangePreview() {
+    if (!_changeCtx || !_changeCtx.onPreview) return;
+    const pv = $('#change-preview-btn'), ap = $('#change-apply-btn');
+    pv.disabled = true; pv.textContent = 'Previewing…';
+    $('#change-status').style.display = 'none';
+    try {
+        const res = await _changeCtx.onPreview();
+        if (!res.ok) { showModalStatus('#change-status', `❌ ${res.data.message || 'Preview failed'}`, 'error'); return; }
+        const d = res.data, sm = d.summary || {};
+        _changeCtx.token = d.preview_token;
+        _changeCtx.preview = d;
+        const configs = d.config_changes || [];
+        $('#change-preview').innerHTML = `<div class="chip-row">
+            <span class="chip"><b>${escHtml(sm.resources_changing ?? 0)}</b> resources change</span>
+            <span class="chip diff-add"><b>${escHtml(sm.keys_added ?? 0)}</b> tags added</span>
+            <span class="chip diff-change"><b>${escHtml(sm.keys_changed ?? 0)}</b> changed</span>
+            <span class="chip"><b>${escHtml(sm.keys_skipped ?? 0)}</b> skipped (exist)</span>
+            ${sm.invalid_resources ? `<span class="chip" style="color:var(--danger)"><b>${escHtml(sm.invalid_resources)}</b> invalid</span>` : ''}
+            <span class="chip">compliant <b>${escHtml(sm.compliant_before ?? 0)}</b> → <b>${escHtml(sm.compliant_after ?? 0)}</b></span>
+            ${configs.length ? `<span class="chip"><b>${configs.length}</b> config fixes</span>` : ''}
+        </div>` + renderChangeItems((d.items || []).concat(configs.map(c => ({ ...c, result: 'planned' }))), false);
+        ap.disabled = !((sm.resources_changing || 0) + configs.length);
+    } finally { pv.disabled = false; pv.textContent = 'Preview again'; }
+}
+
+async function doChangeApply() {
+    if (!_changeCtx || !_changeCtx.onApply) return;
+    const ap = $('#change-apply-btn');
+    ap.disabled = true; ap.textContent = 'Applying…';
+    const res = await _changeCtx.onApply(_changeCtx.token);
+    if (!res.ok) {
+        ap.textContent = 'Apply';
+        showModalStatus('#change-status', `❌ ${res.data.message || 'Apply failed'}${res.data.error_code === 'PLAN_CHANGED' ? ' — click Preview again.' : ''}`, 'error');
+        return;
+    }
+    const cs = res.data, sm = cs.summary || {};
+    showModalStatus('#change-status', `✅ Change set ${cs.id}: ${sm.SUCCESS || 0} succeeded, ${sm.FAILED || 0} failed, ${sm.INVALID || 0} invalid. You can undo it from the Changes tab.`, sm.FAILED ? 'error' : 'success');
+    $('#change-preview').innerHTML = renderChangeItems(cs.items, true) +
+        `<div style="margin-top:10px"><button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escHtml(cs.id)}')">↩ Undo this change set</button></div>`;
+    ap.textContent = 'Applied';
+    $('#change-preview-btn').style.display = 'none';
+    ent.selected.clear();
+    loadChanges();
+    setTimeout(triggerBackgroundRefresh, 800);
+}
+
+// ── Bulk fix (#2) ────────────────────────────────────────────────────
+
+function bulkTagRow(key = '', value = '') {
+    const keys = Object.keys(ent.schemaByTag);
+    return `<div class="tag-edit-row">
+        <input class="bulk-key" list="bulk-key-list" placeholder="Tag key" value="${escHtml(key)}">
+        <input class="bulk-val" placeholder="Value" value="${escHtml(value)}">
+        <button class="btn-ghost" title="Remove" onclick="this.closest('.tag-edit-row').remove()">✕</button>
+        <div class="sugg"></div>
+    </div>`;
+}
+
+function openBulkFix(arnsOverride) {
+    const arns = Array.isArray(arnsOverride) ? arnsOverride : [...ent.selected];
+    if (!arns.length) return toast('Select at least one resource.', 'error');
+    // Pre-fill keys that are missing/invalid on the selected resources
+    const byId = new Map(ent.resources.map(r => [r.id, r]));
+    const counts = {};
+    arns.forEach(a => ((byId.get(a) || {}).violations || []).forEach(v => {
+        if (FIXABLE.has(v.type)) counts[v.tag] = (counts[v.tag] || 0) + 1;
+    }));
+    const keys = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+    const rows = (keys.length ? keys : ['']).map(k => bulkTagRow(k)).join('');
+    const options = Object.keys(ent.schemaByTag).map(k => `<option value="${escHtml(k)}">`).join('');
+    openChangeModal({
+        title: `Bulk fix · ${arns.length.toLocaleString()} resources`,
+        formHtml: `<datalist id="bulk-key-list">${options}</datalist>
+            <div class="chart-sub" style="margin-bottom:8px">Only these keys are written; other tags stay as they are.
+              ${keys.length ? `Pre-filled with the keys missing or invalid on the selection.` : ''}</div>
+            <div id="bulk-rows">${rows}</div>
+            <div class="bulk-bar" style="margin-top:6px">
+              <button class="btn-ghost" onclick="document.getElementById('bulk-rows').insertAdjacentHTML('beforeend', bulkTagRow())">+ Add tag</button>
+              <label class="chart-sub" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="bulk-overwrite"> Overwrite existing values</label>
+            </div>`,
+        onPreview: () => apiPost('/api/bulk/preview', bulkPayload(arns)),
+        onApply: (token) => apiPost('/api/bulk/apply', { ...bulkPayload(arns), preview_token: token }),
+    });
+    loadBulkSuggestions(arns, keys);
+}
+
+function bulkPayload(arns) {
+    const tags = {};
+    $$('#bulk-rows .tag-edit-row').forEach(row => {
+        const k = row.querySelector('.bulk-key').value.trim();
+        const v = row.querySelector('.bulk-val').value.trim();
+        if (k && v) tags[k] = v;
+    });
+    return { arns, tags, overwrite: !!($('#bulk-overwrite') || {}).checked };
+}
+
+async function loadBulkSuggestions(arns, keys) {
+    if (!keys.length) return;
+    const { ok, data } = await apiPost('/api/suggestions', { arns: arns.slice(0, 500), keys });
+    if (!ok) return;
+    $$('#bulk-rows .tag-edit-row').forEach(row => {
+        const key = row.querySelector('.bulk-key').value.trim();
+        const list = (data.aggregate || {})[key] || [];
+        const allowed = (ent.schemaByTag[key] || {}).allowed_values || [];
+        const chips = list.map(sg => `<span class="chip clickable" data-val="${escHtml(sg.value)}" title="avg confidence ${Math.round(sg.avg_confidence * 100)}%">💡 <b>${escHtml(sg.value)}</b> ${escHtml(sg.resources)}/${arns.length}</span>`);
+        if (!chips.length && allowed.length) allowed.forEach(a => chips.push(`<span class="chip clickable" data-val="${escHtml(a)}">${escHtml(a)}</span>`));
+        row.querySelector('.sugg').innerHTML = chips.join('');
+        row.querySelectorAll('.chip.clickable').forEach(c => c.onclick = () => { row.querySelector('.bulk-val').value = c.dataset.val; });
+    });
+}
+
+// ── Propagation (#7, #8) ─────────────────────────────────────────────
+
+async function loadPropagation() {
+    const p = await safeFetch('/api/propagation');
+    if (p._error) return;
+    const rulesEl = $('#prop-rules');
+    if (rulesEl && !rulesEl.dataset.ready) {
+        rulesEl.innerHTML = p.rules.map(r => `<label><input type="checkbox" class="prop-rule" value="${escHtml(r.name)}" checked> ${escHtml(r.label)}</label>`).join('');
+        rulesEl.dataset.ready = '1';
+        const sel = $('#prop-filter-rule');
+        if (sel) sel.innerHTML = '<option value="">All rules</option>' + p.rules.map(r => `<option value="${escHtml(r.name)}">${escHtml(r.label)}</option>`).join('');
+    }
+    ent.prop.run = p.run;
+    const btn = $('#btn-prop-run');
+    if (p.is_running) {
+        setText('#prop-status', 'Checking…');
+        if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+        if (!ent.prop.polling) ent.prop.polling = setInterval(async () => {
+            const s = await safeFetch('/api/propagation');
+            if (!s._error && !s.is_running) {
+                clearInterval(ent.prop.polling); ent.prop.polling = null;
+                if (btn) { btn.disabled = false; btn.textContent = 'Run check'; }
+                if (s.last_error) toast(`Propagation check failed: ${s.last_error}`, 'error');
+                loadPropagation();
+            }
+        }, 2000);
+    } else if (p.run) {
+        const sm = p.run.summary;
+        setText('#prop-status', `Last check ${fmtDate(sm.timestamp)} · ${sm.regions.join(', ')} · ${sm.findings} findings` +
+            (sm.errors.length ? ` · ${sm.errors.length} rule error(s)` : ''));
+    } else if (p.last_error) {
+        setText('#prop-status', `Last check failed: ${p.last_error}`);
+    }
+    renderPropagation();
+}
+
+function renderPropagation() {
+    const run = ent.prop.run;
+    const tbody = $('#prop-table-body');
+    if (!tbody) return;
+    if (!run) { showUnavailable('#prop-table-body', 6, 'Run a check to see findings.'); return; }
+    const sm = run.summary;
+    const summaryEl = $('#prop-summary');
+    if (summaryEl) {
+        summaryEl.innerHTML = Object.entries(sm.parents_checked).map(([rule, n]) => {
+            const b = (sm.by_rule || {})[rule] || { tags: 0, config: 0 };
+            return `<span class="chip"><b>${escHtml(rule)}</b> ${escHtml(n)} parents · ${escHtml(b.tags)} children off · ${escHtml(b.config)} config</span>`;
+        }).join('') + sm.errors.map(e => `<span class="chip" style="color:var(--danger)" title="${escHtml(e.error)}">⚠ ${escHtml(e.rule)} ${escHtml(e.region)}</span>`).join('');
+    }
+    const rule = ($('#prop-filter-rule') || {}).value || '';
+    const kind = ($('#prop-filter-kind') || {}).value || '';
+    const rows = run.findings.filter(f => (!rule || f.rule === rule) && (!kind || f.kind === kind));
+    ent.prop.shown = rows;
+    if (!rows.length) { showUnavailable('#prop-table-body', 6, run.findings.length ? 'No findings match the filters.' : 'All children carry their parents\' tags. 🎉'); return; }
+    tbody.innerHTML = rows.slice(0, 1000).map(f => `<tr>
+        <td><input type="checkbox" class="prop-check" data-id="${escHtml(f.id)}" ${ent.prop.selected.has(f.id) ? 'checked' : ''}></td>
+        <td><span class="status-badge info">${escHtml(f.rule)}</span></td>
+        <td class="arn-cell">${escHtml(f.parent_name)}<div class="chart-sub">${escHtml(f.parent_arn)}</div></td>
+        <td class="arn-cell">${f.kind === 'config' ? `<span class="status-badge warn">${escHtml(f.issue)}</span><div class="chart-sub">${escHtml(f.detail)}</div>` : `${escHtml(f.child_arn)}<div class="chart-sub">${escHtml(f.child_type)}</div>`}</td>
+        <td>${Object.entries(f.missing || {}).map(([k, v]) => `<span class="tag-chip diff-add"><b>${escHtml(k)}</b> ${escHtml(v)}</span>`).join('') || '-'}</td>
+        <td>${Object.entries(f.mismatched || {}).map(([k, v]) => `<span class="tag-chip diff-change"><b>${escHtml(k)}</b> ${escHtml(v.actual)} → ${escHtml(v.expected)}</span>`).join('') || '-'}</td>
+    </tr>`).join('') + (rows.length > 1000 ? `<tr><td colspan="6" class="chart-sub" style="padding:1rem">Showing 1,000 of ${rows.length}. Use the filters to narrow down.</td></tr>` : '');
+    setText('#prop-selected', `${ent.prop.selected.size} selected`);
+}
+
+function propSelectAll(on) {
+    (ent.prop.shown || []).forEach(f => on ? ent.prop.selected.add(f.id) : ent.prop.selected.delete(f.id));
+    renderPropagation();
+}
+
+async function runPropagation() {
+    const rules = [...$$('.prop-rule:checked')].map(c => c.value);
+    if (!rules.length) return toast('Pick at least one rule.', 'error');
+    const { ok, data } = await apiPost('/api/propagation/run', { rules });
+    if (!ok) return toast(data.message || 'Could not start the check', 'error');
+    ent.prop.selected.clear();
+    loadPropagation();
+}
+
+function previewPropagationFix() {
+    const ids = [...ent.prop.selected];
+    if (!ids.length) return toast('Select findings first (or "Select all shown").', 'error');
+    const overwrite = !!($('#prop-overwrite') || {}).checked;
+    openChangeModal({
+        title: `Propagation fix · ${ids.length} findings`,
+        formHtml: `<div class="chart-sub">Children get the parent's missing tags${overwrite ? ' and mismatched values are replaced' : '; mismatched values are kept (enable "Overwrite" to replace)'}. Config fixes switch on tag propagation for new instances/tasks.</div>`,
+        onPreview: () => apiPost('/api/propagation/preview', { finding_ids: ids, overwrite }),
+        onApply: (token) => apiPost('/api/propagation/apply', { finding_ids: ids, overwrite, preview_token: token }),
+    });
+    doChangePreview();
+}
+
+// ── Tab hooks ────────────────────────────────────────────────────────
+
+function onEnterpriseTab(tab) {
+    if (typeof ent === 'undefined') return;
+    if (tab === 'mine') loadMine();
+    else if (tab === 'changes') loadChanges();
+    else if (tab === 'propagation') loadPropagation();
+    else if (tab === 'organization') { loadLeaderboard(); loadOrganization(); }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeFixTagsModal(); closeExemptModal(); hideTip(); }
+    if (e.key === 'Escape') { closeFixTagsModal(); closeExemptModal(); closeChangeModal(); hideTip(); }
 });
 
 let _resizeTimer = null;

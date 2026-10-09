@@ -83,7 +83,51 @@ AUTH_MODE_DEFAULT: str = "alb_oidc"
 # When true, MCP write tools (write_tags, apply_governance, sync_tags) are refused.
 MCP_READ_ONLY: bool = os.environ.get("MCP_READ_ONLY", "false").lower() == "true"
 
-APP_VERSION: str = os.environ.get("APP_VERSION", "0.3.0")
+APP_VERSION: str = os.environ.get("APP_VERSION", "0.4.0")
+
+
+def _csv(name: str, default: str = "") -> List[str]:
+    return [v.strip() for v in os.environ.get(name, default).split(",") if v.strip()]
+
+
+# ── Inventory ────────────────────────────────────────────────────────
+# tagging           → Resource Groups Tagging API only (sees resources that are/were tagged)
+# resource_explorer → AWS Resource Explorer inventory merged with tagging API tags
+#                     (also finds resources that were never tagged)
+INVENTORY_SOURCE: str = os.environ.get("INVENTORY_SOURCE", "tagging").strip().lower()
+# Region holding the Resource Explorer aggregator index (default: each scanned region's local index)
+RESOURCE_EXPLORER_REGION: str = os.environ.get("RESOURCE_EXPLORER_REGION", "")
+RESOURCE_EXPLORER_VIEW_ARN: str = os.environ.get("RESOURCE_EXPLORER_VIEW_ARN", "")
+# mapped → evaluate only RESOURCE_TYPE_MAP types (others are reported as coverage gaps)
+# all    → evaluate every discovered resource type
+COMPLIANCE_SCOPE: str = os.environ.get("COMPLIANCE_SCOPE", "mapped").strip().lower()
+
+# ── Multi-account ────────────────────────────────────────────────────
+# ""        → only the account of the running credentials
+# "all"     → every ACTIVE account in the AWS Organization (needs organizations:ListAccounts)
+# "1,2,..." → explicit account IDs (MULTI_ACCOUNT_ROLE_NAME is assumed in each)
+COMPLIANCE_ACCOUNTS: str = os.environ.get("COMPLIANCE_ACCOUNTS", "").strip()
+MULTI_ACCOUNT_EXTERNAL_ID: str = os.environ.get("MULTI_ACCOUNT_EXTERNAL_ID", "")
+
+# ── Leaderboards & history ───────────────────────────────────────────
+# Tag whose value identifies a team (falls back to OWNER_TAG_KEY when absent on a resource)
+TEAM_TAG_KEY: str = os.environ.get("TEAM_TAG_KEY", "Team")
+# Scan summaries/leaderboard stats are kept this long (resource rows follow SCAN_RETENTION)
+HISTORY_RETENTION_DAYS: int = max(1, int(os.environ.get("HISTORY_RETENTION_DAYS", "90")))
+
+# ── Owner view ───────────────────────────────────────────────────────
+OWNER_MATCH_TAGS: List[str] = _csv("OWNER_MATCH_TAGS", "Owner")
+EXEMPTION_EXPIRY_WARNING_DAYS: int = int(os.environ.get("EXEMPTION_EXPIRY_WARNING_DAYS", "14"))
+OWNER_COST_CACHE_SECONDS: int = int(os.environ.get("OWNER_COST_CACHE_SECONDS", "21600"))
+
+# ── Bulk changes & propagation ───────────────────────────────────────
+MAX_BULK_RESOURCES: int = int(os.environ.get("MAX_BULK_RESOURCES", "1000"))
+# Tags never copied from parent to child resources
+PROPAGATE_EXCLUDE_KEYS: List[str] = _csv("PROPAGATE_EXCLUDE_KEYS", "Name")
+# Tags that are propagated: "schema" (every schema tag), "all" (every tag), or a comma list
+PROPAGATE_KEYS: str = os.environ.get("PROPAGATE_KEYS", "schema").strip()
+# Change sets (and their undo data) kept for this many days
+CHANGESET_RETENTION_DAYS: int = int(os.environ.get("CHANGESET_RETENTION_DAYS", "90"))
 
 
 

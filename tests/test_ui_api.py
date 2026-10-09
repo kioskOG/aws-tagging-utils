@@ -209,7 +209,6 @@ def test_finops_api_failure(client):
 
 @pytest.mark.parametrize("endpoint,expected_message_keyword", [
     ("/api/security", "DynamoDB"),
-    ("/api/organization", "Organizations"),
     ("/api/cicd", "local"),
 ])
 def test_unimplemented_endpoints(client, endpoint, expected_message_keyword):

@@ -198,6 +198,12 @@ def background_refresh(regions: list[str] | None = None,
         regs = regions or resolve_scan_regions()
         tags = mandatory_tags or MANDATORY_TAGS
 
+        from src.config import COMPLIANCE_ACCOUNTS
+        if COMPLIANCE_ACCOUNTS:
+            # Account names / OUs for leaderboards (refreshed at most daily)
+            from src.aws_session import account_directory
+            account_directory(refresh_if_stale=True)
+
         log.info("background_refresh: scanning regions=%s tags=%s", regs, tags)
         report = generate_report(regs, tags)
         region_errors = {r: d.get("error") for r, d in report.get("regions", {}).items() if d.get("error")}

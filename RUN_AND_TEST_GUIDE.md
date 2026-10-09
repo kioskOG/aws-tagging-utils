@@ -2,7 +2,7 @@
 
 A step-by-step guide to running every feature of this project locally (or in Docker), the environment variables each one uses, and how to test it.
 
-> Verified on branch `advance-1` (v0.3.0): `pytest -m "not integration"` → **258 passed**; the app runs under gunicorn, and `/health`, `/ready` and `/metrics` respond.
+> Verified on branch `advance-1` (v0.4.0): `pytest -m "not integration"` → **282 passed**; the app runs under gunicorn, and the bulk fix → apply → undo flow was driven end to end in a real browser against an in-memory tagging API.
 
 ---
 
@@ -32,6 +32,11 @@ A step-by-step guide to running every feature of this project locally (or in Doc
 | 20 | **Metrics** (Prometheus + CloudWatch EMF) | `GET /metrics` | No | Prometheus / CloudWatch |
 | 21 | **Compliance trend & CSV export** | `/api/compliance/history`, `/api/compliance/export.csv` | No | — |
 | 22 | Health / readiness probes | `GET /health`, `GET /ready` | No | — |
+| 23 | **Full inventory** (Resource Explorer) + coverage gaps | `INVENTORY_SOURCE`, `/api/inventory/coverage` | Yes | Resource Explorer index |
+| 24 | **Bulk fix** with preview, undo & value suggestions | `/api/bulk/*`, `/api/changesets*`, `/api/suggestions` | Yes | — |
+| 25 | **Multi-account scans** + **leaderboards** | `COMPLIANCE_ACCOUNTS`, `/api/leaderboard`, `/api/organization` | Yes | Org + StackSet role |
+| 26 | **My Resources** (owner view) | `/api/me/resources` | Partly | Cost Explorer for cost |
+| 27 | **Tag propagation** checks & fixes (10 parent types) | `/api/propagation*`, `/api/sync` | Yes | — |
 
 ---
 
@@ -559,8 +564,102 @@ Open http://127.0.0.1:5050/ (tabs are deep-linkable: `/#compliance`, `/#enforcem
 | Enforcement | Remediation / Exemptions / Audit tables | Real data from `/api/remediation`, `/api/exemptions`, `/api/audit`; **Revoke** asks for confirmation then revokes |
 | Schema | — | Required (incl. `MANDATORY_TAGS`), allowed values, regex and aliases per tag |
 
-### 8.15 Endpoints that intentionally return 501
-`/api/security`, `/api/organization`, `/api/cicd` are not implemented yet and return `501 NOT_IMPLEMENTED`.
+### 8.15 Platform features (v0.4)
+
+#### Full inventory & coverage gaps
+**Env:** `INVENTORY_SOURCE`, `RESOURCE_EXPLORER_REGION`, `RESOURCE_EXPLORER_VIEW_ARN`, `COMPLIANCE_SCOPE`.
+**IAM:** `resource-explorer-2:ListResources`.
+
+```bash
+# One-time: turn on Resource Explorer (aggregator index in your home region + a default view)
+aws resource-explorer-2 create-index --region ap-south-1 --type AGGREGATOR
+aws resource-explorer-2 create-view --region ap-south-1 --view-name all --included-properties Name=tags
+aws resource-explorer-2 associate-default-view --region ap-south-1 --view-arn <view-arn>
+
+# .env
+INVENTORY_SOURCE=resource_explorer
+RESOURCE_EXPLORER_REGION=ap-south-1
+```
+Refresh, then:
+```bash
+curl -s $API/api/inventory/coverage | jq '{never_tagged, unmapped_resources, unmapped_types: .unmapped_types[:5]}'
+```
+✅ **Expect:** `never_tagged` > 0 when you have resources without any tag (they're now NON_COMPLIANT and filterable via **Issue → Never tagged**); `unmapped_types` lists services the scan saw but doesn't evaluate (e.g. `kafka:cluster`, `bedrock:agent`). The Dashboard shows an **Inventory coverage** card; the full list is under **Schema → Discovered but not evaluated**. `COMPLIANCE_SCOPE=all` evaluates every type. If Resource Explorer isn't set up in a region, that region falls back to the tagging API with a warning.
+
+#### Bulk fix with preview, undo and suggestions
+**Env:** `MAX_BULK_RESOURCES`, `CHANGESET_RETENTION_DAYS`. **Role:** PlatformAdmin / TagOperator (ApplicationOwner: only resources they own).
+
+UI: **Compliance** → tick rows or **Select all filtered** → **Bulk fix…** → keys missing on the selection are pre-filled with 💡 suggestions → **Preview** → **Apply** → **Changes** tab → **Undo**.
+
+```bash
+P=$(curl -s -X POST $API/api/bulk/preview -H 'Content-Type: application/json' \
+  -d '{"arns":["<arn1>","<arn2>"],"tags":{"Owner":"platform"}}')
+echo $P | jq '.summary'                      # resources_changing, keys_added, compliant_before → after
+CS=$(curl -s -X POST $API/api/bulk/apply -H 'Content-Type: application/json' \
+  -d "{\"arns\":[\"<arn1>\",\"<arn2>\"],\"tags\":{\"Owner\":\"platform\"},\"preview_token\":$(echo $P | jq .preview_token)}" | jq -r .id)
+curl -s -X POST $API/api/changesets/$CS/undo | jq '.summary'
+curl -s -X POST $API/api/suggestions -H 'Content-Type: application/json' -d '{"arns":["<arn>"],"keys":["Owner"]}' | jq
+```
+✅ **Expect:** only the listed keys change (existing values are kept unless `"overwrite": true`); invalid values are reported, not written; if resources changed after the preview, apply returns **409 PLAN_CHANGED**; undo restores previous values and removes added keys, but **leaves alone any key someone changed since** (reported as a conflict). Every resource change is in the audit log with its change set id.
+
+#### Multi-account scans & leaderboards
+**Env:** `COMPLIANCE_ACCOUNTS`, `MULTI_ACCOUNT_ROLE_NAME`, `MULTI_ACCOUNT_EXTERNAL_ID`, `TEAM_TAG_KEY`, `HISTORY_RETENTION_DAYS`.
+**IAM (central account):** `sts:AssumeRole` on the member role, `organizations:ListAccounts`, `organizations:ListParents`, `organizations:DescribeOrganizationalUnit`.
+
+1. Deploy `deploy/stacksets/governance-role.yaml` to member accounts (section 13). It now carries every read/tag permission the tool uses; `AllowTagWrites=false` makes it read-only.
+2. `.env`: `COMPLIANCE_ACCOUNTS=all` (or `111111111111,222222222222`).
+3. Refresh. Then:
+```bash
+curl -s "$API/api/leaderboard?dimension=team"    | jq '.rows[] | {rank, name, compliance_pct, delta}'
+curl -s "$API/api/leaderboard?dimension=account" | jq '.rows[] | {name, ou, compliance_pct}'
+curl -s "$API/api/leaderboard?dimension=ou"      | jq
+curl -s $API/api/organization | jq '.accounts[] | {name, ou, compliance_pct, errors}'
+```
+✅ **Expect:** one row per team (`Team` tag, falling back to `Owner`), account, OU or service; `delta` = change vs the newest scan ≥ 7 days older (null until one exists). An account whose role can't be assumed shows its error in **Leaderboard → Accounts scanned** without failing the other accounts.
+
+#### My Resources (owner view)
+**Env:** `OWNER_MATCH_TAGS`, `DEV_AUTH_EMAIL` (local), `EXEMPTION_EXPIRY_WARNING_DAYS`, `OWNER_COST_CACHE_SECONDS`.
+A resource is yours when its `Owner` equals your user id/email or ends with `/<email>` (AWS SSO session names like `AWSReservedSSO_Admin_x/jane@example.com`).
+```bash
+curl -s $API/api/me/resources | jq '{summary, cost, expiring: [.expiring_exemptions[] | {days_left, reason}]}'
+curl -s "$API/api/me/resources?owner=payments" | jq '.summary'     # admins: view as another owner
+```
+✅ **Expect:** your resources, their violations, exemptions expiring within 14 days, and month-to-date **owned vs unallocated spend** (resources with your Owner tag but no cost-allocation tag). Cost needs `ce:GetCostAndUsage` and the Owner tag activated as a cost allocation tag; otherwise the UI explains why it's N/A. UI: **My Resources → Fix all mine…** opens the bulk fix for your non-compliant resources.
+
+#### Tag propagation checks (10 parent types)
+**Env:** `PROPAGATE_KEYS`, `PROPAGATE_EXCLUDE_KEYS`.
+
+| Rule | Parent → children | Config check |
+|------|-------------------|--------------|
+| `vpc` | VPC → subnets, SGs, route tables, IGW/NAT, NACLs, endpoints | — |
+| `ec2_instance` | instance → EBS volumes, ENIs | — |
+| `ebs_volume` | volume → snapshots | — |
+| `asg` | Auto Scaling group → instances | `PropagateAtLaunch` off |
+| `ecs_service` | ECS service → tasks | `propagateTags=NONE` |
+| `cloudformation` | stack → resources it created | — |
+| `rds_cluster` | cluster → DB instances | — |
+| `eks_cluster` | cluster → managed node groups | — |
+| `elbv2` | ALB/NLB → target groups | — |
+| `lambda` | function → `/aws/lambda/<name>` log group | — |
+
+UI: **Propagation** → pick rules → **Run check** → filter → select → **Preview fix…** → **Apply** (undoable).
+```bash
+curl -s -X POST $API/api/propagation/run -H 'Content-Type: application/json' -d '{"rules":["ec2_instance","asg"]}'
+curl -s $API/api/propagation | jq '.run.summary'
+```
+✅ **Expect:** findings list missing / mismatched keys per child, and config findings for ASGs/ECS services whose propagation is off (the fix switches it on; undo switches it back). `Name` and `aws:*` tags are never propagated.
+
+#### Propagate from one parent (Tag Tools → Tag Propagator, API, MCP)
+```bash
+curl -s -X POST $API/api/sync -H 'Content-Type: application/json' \
+  -d '{"action":"propagate","rule":"asg","parent":"eks-nodes","region":"ap-south-1","dry_run":true}' | jq '.preview.summary, .config_changes'
+curl -s -X POST $API/api/sync -H 'Content-Type: application/json' \
+  -d '{"action":"propagate","rule":"asg","parent":"eks-nodes","region":"ap-south-1"}' | jq '{change_set_id, status}'
+```
+The legacy `{"action":"sync_vpc","vpc_id":...}` still works, and **no longer copies the VPC's `Name` onto every subnet/SG/route table** (it used to rename them all).
+
+### 8.16 Endpoints that intentionally return 501
+`/api/security` and `/api/cicd` are not implemented yet and return `501 NOT_IMPLEMENTED`.
 
 ---
 
@@ -590,7 +689,7 @@ or in Claude Desktop `claude_desktop_config.json`:
 }
 ```
 
-Tools: `list_resource_types`, `read_tags`, `write_tags`, `apply_governance`, `get_tag_report`, `sync_tags`.
+Tools: `list_resource_types`, `read_tags`, `write_tags`, `apply_governance`, `get_tag_report`, `sync_tags` (any of the 10 propagation rules, with `dry_run`), `check_tag_propagation`, `preview_tag_changes`, `apply_tag_changes`, `undo_tag_changes`, `suggest_tag_values`, `compliance_leaderboard`.
 
 Logs go to **stderr** (stdout is the MCP JSON-RPC channel). Set `MCP_READ_ONLY=true` to expose only the read tools.
 

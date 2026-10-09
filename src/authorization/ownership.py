@@ -7,10 +7,11 @@ class OwnershipResolver:
     """
     @staticmethod
     def is_owner(identity: UserIdentity, resource_tags: Dict[str, str]) -> bool:
-        # Simple mock: if user_id matches the 'Owner' or 'Application' tag
-        owner_tag = resource_tags.get("Owner", "")
-        app_tag = resource_tags.get("Application", "")
-        
-        if identity.user_id == owner_tag or identity.user_id == app_tag:
+        """Same rules as the owner view: OWNER_MATCH_TAGS (default Owner) and Application,
+        matching the user id or email exactly or as the suffix of an SSO session name."""
+        from src.insights import owner_identifiers, owner_matches
+        ids = owner_identifiers(identity)
+        if owner_matches(ids, resource_tags):
             return True
-        return False
+        app = str(resource_tags.get("Application", "")).strip().lower()
+        return bool(app) and app in ids

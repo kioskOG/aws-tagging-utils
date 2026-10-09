@@ -135,27 +135,24 @@ def test_refresh_keeps_last_good_scan_when_every_region_fails():
 
 def test_report_honors_mandatory_tags():
     from src import tag_report
-    page = {"ResourceTagMappingList": [{"ResourceARN": VPC, "Tags": [
-        {"Key": "Owner", "Value": "a"}, {"Key": "Environment", "Value": "dev"}]}]}
-    paginator = MagicMock()
-    paginator.paginate.return_value = [page]
-    client = MagicMock()
-    client.get_paginator.return_value = paginator
-    with patch.object(tag_report, "get_client", return_value=client):
-        report = tag_report.generate_report(["us-east-1"], ["Owner", "Application"], ["ec2:vpc"])
+    inv = {"resources": [{"arn": VPC, "tags": {"Owner": "a", "Environment": "dev"},
+                          "resource_type": "ec2:vpc", "never_tagged": False}], "source": "tagging", "warning": None}
+    with patch.object(tag_report, "collect_inventory", return_value=inv):
+        report = tag_report.generate_report(["us-east-1"], ["Owner", "Application"], ["ec2:vpc"], accounts=[None])
     res = report["regions"]["us-east-1"]["resources"][0]
     assert res["IsCompliant"] is False
     assert {"tag": "Application", "type": "MISSING_REQUIRED"}.items() <= res["Violations"][0].items()
 
 
-def test_scan_retention_prunes_old_scans(monkeypatch):
+def test_scan_retention_prunes_resource_rows_but_keeps_history(monkeypatch):
     import src.config
-    from src.db import get_scan_history, insert_scan, init_db
+    from src.db import get_scan_history, insert_scan, init_db, scan_resource_ids_with_rows
     init_db()
     monkeypatch.setattr(src.config, "SCAN_RETENTION", 3)
     for _ in range(5):
         insert_scan(_report([{"ResourceARN": VPC, "IsCompliant": True, "Violations": [], "Tags": {}}]))
-    assert len(get_scan_history(100)) == 3
+    assert len(scan_resource_ids_with_rows()) == 3   # heavy per-resource rows pruned
+    assert len(get_scan_history(100)) == 5           # summaries kept for trends (HISTORY_RETENTION_DAYS)
 
 
 def test_warnings_survive_cache_roundtrip():

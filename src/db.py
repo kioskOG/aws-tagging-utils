@@ -88,8 +88,45 @@ def init_db() -> None:
         """)
         # Additive migrations for databases created by older versions
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(compliance_resources)")}
-        if "warnings_json" not in cols:
-            conn.execute("ALTER TABLE compliance_resources ADD COLUMN warnings_json TEXT")
+        for col, ddl in (("warnings_json", "TEXT"), ("resource_type", "TEXT"), ("never_tagged", "INTEGER DEFAULT 0")):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE compliance_resources ADD COLUMN {col} {ddl}")
+        conn.executescript("""
+            -- Per-scan aggregates for leaderboards (kept HISTORY_RETENTION_DAYS, unlike resource rows)
+            CREATE TABLE IF NOT EXISTS scan_group_stats (
+                scan_id INTEGER NOT NULL,
+                dimension TEXT NOT NULL,
+                key TEXT NOT NULL,
+                total INTEGER NOT NULL,
+                compliant INTEGER NOT NULL,
+                PRIMARY KEY (scan_id, dimension, key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_group_stats_dim ON scan_group_stats(dimension, scan_id);
+            CREATE INDEX IF NOT EXISTS idx_compliance_resources_arn ON compliance_resources(arn);
+
+            -- Undoable tag change sets (bulk fixes, propagation)
+            CREATE TABLE IF NOT EXISTS change_sets (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                actor TEXT,
+                kind TEXT NOT NULL,
+                description TEXT,
+                status TEXT NOT NULL,
+                summary_json TEXT,
+                items_json TEXT NOT NULL,
+                undo_of TEXT,
+                undone_by_changeset TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_change_sets_created ON change_sets(created_at);
+
+            -- Latest tag-propagation findings
+            CREATE TABLE IF NOT EXISTS propagation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                summary_json TEXT NOT NULL,
+                findings_json TEXT NOT NULL
+            );
+        """)
     logger.info("Database initialized at %s", DB_PATH)
 
 def insert_scan(report: Dict[str, Any], status: str = "COMPLETED") -> int:
@@ -125,33 +162,115 @@ def insert_scan(report: Dict[str, Any], status: str = "COMPLETED") -> int:
                 
                 resources_to_insert.append((
                     scan_id, arn, region, account, res_type,
-                    is_compliant, violations, tags, warnings
+                    is_compliant, violations, tags, warnings,
+                    res.get("ResourceType"), int(bool(res.get("NeverTagged"))),
                 ))
         
         if resources_to_insert:
             conn.executemany("""
-                INSERT INTO compliance_resources (scan_id, arn, region, account, type, is_compliant, violations_json, tags_json, warnings_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO compliance_resources (scan_id, arn, region, account, type, is_compliant, violations_json, tags_json, warnings_json, resource_type, never_tagged)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, resources_to_insert)
+
+        stats = group_stats(report)
+        if stats:
+            conn.executemany(
+                "INSERT OR REPLACE INTO scan_group_stats (scan_id, dimension, key, total, compliant) VALUES (?,?,?,?,?)",
+                [(scan_id, dim, key, v[0], v[1]) for (dim, key), v in stats.items()])
 
     prune_scans()
     return scan_id
 
 
+def team_of(tags: Dict[str, str]) -> str:
+    """Team for leaderboards: TEAM_TAG_KEY, else OWNER_TAG_KEY (case-insensitive keys)."""
+    from src.config import OWNER_TAG_KEY, TEAM_TAG_KEY
+    lowered = {str(k).lower(): v for k, v in (tags or {}).items()}
+    for key in (TEAM_TAG_KEY, OWNER_TAG_KEY):
+        val = str(lowered.get(key.lower(), "")).strip()
+        if val:
+            return val
+    return "(no team)"
+
+
+def group_stats(report: Dict[str, Any]) -> Dict[tuple, list]:
+    """(dimension, key) -> [total, compliant] for account, team and service."""
+    stats: Dict[tuple, list] = {}
+
+    def add(dim: str, key: str, ok: bool) -> None:
+        v = stats.setdefault((dim, key or "unknown"), [0, 0])
+        v[0] += 1
+        v[1] += int(ok)
+
+    for region_data in report.get("regions", {}).values():
+        if region_data.get("error"):
+            continue
+        for res in region_data.get("resources", []):
+            arn = res.get("ResourceARN", "")
+            parts = arn.split(":")
+            account = parts[4] if len(parts) > 4 and parts[4] else "unknown"
+            ok = bool(res.get("IsCompliant"))
+            add("account", account, ok)  # OU is derived from account stats at query time
+            add("team", team_of(res.get("Tags", {})), ok)
+            add("service", parts[2] if len(parts) > 2 else "unknown", ok)
+    return stats
+
+
 def prune_scans(keep: Optional[int] = None) -> int:
-    """Delete all but the newest `keep` scans (and their resources). Returns rows deleted."""
-    from src.config import SCAN_RETENTION
+    """
+    Two-tier retention:
+      * per-resource rows are kept for the newest `keep` (SCAN_RETENTION) scans;
+      * scan summaries and leaderboard stats are kept HISTORY_RETENTION_DAYS (trends, week-over-week).
+    Returns the number of scans whose resource rows were pruned.
+    """
+    from datetime import timedelta
+    from src.config import HISTORY_RETENTION_DAYS, SCAN_RETENTION
     keep = keep or SCAN_RETENTION
     conn = get_connection()
     with conn:
         old_ids = [r["id"] for r in conn.execute(
             "SELECT id FROM compliance_scans ORDER BY id DESC LIMIT -1 OFFSET ?", (keep,))]
-        if not old_ids:
-            return 0
-        marks = ",".join("?" * len(old_ids))
-        conn.execute(f"DELETE FROM compliance_resources WHERE scan_id IN ({marks})", old_ids)
-        conn.execute(f"DELETE FROM compliance_scans WHERE id IN ({marks})", old_ids)
+        if old_ids:
+            marks = ",".join("?" * len(old_ids))
+            conn.execute(f"DELETE FROM compliance_resources WHERE scan_id IN ({marks})", old_ids)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=HISTORY_RETENTION_DAYS)).isoformat()
+        expired = [r["id"] for r in conn.execute(
+            "SELECT id FROM compliance_scans WHERE timestamp < ? AND id NOT IN "
+            "(SELECT id FROM compliance_scans ORDER BY id DESC LIMIT 1)", (cutoff,))]
+        if expired:
+            marks = ",".join("?" * len(expired))
+            conn.execute(f"DELETE FROM compliance_resources WHERE scan_id IN ({marks})", expired)
+            conn.execute(f"DELETE FROM scan_group_stats WHERE scan_id IN ({marks})", expired)
+            conn.execute(f"DELETE FROM compliance_scans WHERE id IN ({marks})", expired)
     return len(old_ids)
+
+
+def scan_resource_ids_with_rows() -> List[int]:
+    conn = get_connection()
+    return [r[0] for r in conn.execute("SELECT DISTINCT scan_id FROM compliance_resources")]
+
+
+def get_group_stats(dimension: str, scan_id: int) -> Dict[str, tuple]:
+    conn = get_connection()
+    return {r["key"]: (r["total"], r["compliant"]) for r in conn.execute(
+        "SELECT key, total, compliant FROM scan_group_stats WHERE dimension = ? AND scan_id = ?",
+        (dimension, scan_id))}
+
+
+def find_scan_before(timestamp_iso: str) -> Optional[Dict[str, Any]]:
+    """Most recent completed scan at or before `timestamp_iso`."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, timestamp FROM compliance_scans WHERE status='COMPLETED' AND timestamp <= ? "
+        "ORDER BY timestamp DESC LIMIT 1", (timestamp_iso,)).fetchone()
+    return {"id": row["id"], "timestamp": row["timestamp"]} if row else None
+
+
+def latest_scan() -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, timestamp FROM compliance_scans WHERE status='COMPLETED' ORDER BY id DESC LIMIT 1").fetchone()
+    return {"id": row["id"], "timestamp": row["timestamp"]} if row else None
 
 
 def get_scan_history(limit: int = 30) -> List[Dict[str, Any]]:
@@ -213,7 +332,7 @@ def get_latest_scan_report() -> Optional[Dict[str, Any]]:
         }
         
         res_cursor = conn.execute("""
-            SELECT arn, region, is_compliant, violations_json, tags_json, warnings_json
+            SELECT arn, region, is_compliant, violations_json, tags_json, warnings_json, resource_type, never_tagged
             FROM compliance_resources 
             WHERE scan_id = ?
         """, (scan_id,))
@@ -230,6 +349,8 @@ def get_latest_scan_report() -> Optional[Dict[str, Any]]:
                 "Violations": json.loads(res_row["violations_json"]) if res_row["violations_json"] else [],
                 "Tags": json.loads(res_row["tags_json"]) if res_row["tags_json"] else {},
                 "Warnings": json.loads(res_row["warnings_json"]) if res_row["warnings_json"] else [],
+                "ResourceType": res_row["resource_type"],
+                "NeverTagged": bool(res_row["never_tagged"]),
             }
             report["regions"][region]["resources"].append(res_info)
             

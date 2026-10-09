@@ -55,12 +55,13 @@ def _after_call_error(context, exception, **kwargs):
     record_aws_call(service, op, type(exception).__name__, duration)
 
 
-def _client(service: str, region: str | None = None):
+def _client(service: str, region: str | None = None, session=None):
+    """Instrumented client; `session` is a boto3.Session (e.g. an assumed role in another account)."""
     with _CREATE_LOCK:
         kwargs = {"config": _BOTO_CONFIG}
         if region:
             kwargs["region_name"] = region
-        client = boto3.client(service, **kwargs)
+        client = (session or boto3).client(service, **kwargs)
     events = client.meta.events
     events.register("before-call", _before_call)
     events.register("after-call", _after_call)
@@ -68,14 +69,19 @@ def _client(service: str, region: str | None = None):
     return client
 
 
-def get_tagging_client(region: str = DEFAULT_REGION):
+def get_client(service: str, region: str = DEFAULT_REGION, session=None):
+    """Any AWS service client with the shared retry config and metrics."""
+    return _client(service, region, session)
+
+
+def get_tagging_client(region: str = DEFAULT_REGION, session=None):
     """Resource Groups Tagging API client."""
-    return _client("resourcegroupstaggingapi", region)
+    return _client("resourcegroupstaggingapi", region, session)
 
 
-def get_ec2_client(region: str = DEFAULT_REGION):
+def get_ec2_client(region: str = DEFAULT_REGION, session=None):
     """EC2 client (used for region discovery and VPC sync)."""
-    return _client("ec2", region)
+    return _client("ec2", region, session)
 
 
 def get_cloudtrail_client(region: str = DEFAULT_REGION):

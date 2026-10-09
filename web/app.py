@@ -276,6 +276,7 @@ def api_me():
     import os
     return jsonify({
         "user_id": identity.user_id,
+        "email": getattr(identity, "email", None),
         "roles": identity.roles,
         "auth_mode": os.environ.get("AUTH_MODE", AUTH_MODE_DEFAULT),
         "permissions": {
@@ -379,6 +380,11 @@ def api_report():
 @require_auth
 def api_sync():
     payload = request.get_json(force=True, silent=True) or {}
+    if not payload.get("dry_run"):
+        from src.authorization.policy import AuthorizationPolicy as _P
+        if not _P.can_modify_tags(g.identity, {}):
+            raise APIError("Forbidden. Insufficient permissions to modify tags.", status_code=403, error_code="FORBIDDEN")
+    payload["actor"] = _actor()
     result = sync_handler(payload, None)
     return _lambda_result_to_response(result)
 
@@ -472,6 +478,8 @@ def _flatten_resources(report: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "missing_tags": [v.get("tag") for v in violations if v.get("type") == "MISSING_REQUIRED"],
                 "invalid_tags": [v.get("tag") for v in violations if v.get("type") != "MISSING_REQUIRED"],
                 "tags": res.get("Tags", {}),
+                "resource_type": res.get("ResourceType") or "",
+                "never_tagged": bool(res.get("NeverTagged")),
                 "violations": violations,
                 "warnings": res.get("Warnings", []),
                 "protected_violations": [v.get("tag") for v in violations if v.get("tag") in protected],
@@ -521,11 +529,11 @@ def api_compliance_export():
     report = get_cached_report() or {"regions": {}}
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["arn", "account", "region", "service", "status", "missing_tags",
+    writer.writerow(["arn", "account", "region", "service", "status", "never_tagged", "missing_tags",
                      "invalid_tags", "warnings", "tags"])
     for r in _flatten_resources(report):
         writer.writerow([
-            r["id"], r["account"], r["region"], r["type"], r["status"],
+            r["id"], r["account"], r["region"], r["type"], r["status"], "yes" if r["never_tagged"] else "",
             ";".join(r["missing_tags"]),
             ";".join(f"{v.get('tag')}={v.get('type')}" for v in r["violations"] if v.get("type") != "MISSING_REQUIRED"),
             ";".join(w.get("tag", "") for w in r["warnings"]),
@@ -629,6 +637,9 @@ def api_dashboard():
         "by_service": extra["by_service"],
         "by_region": extra["by_region"],
         "failed_regions": summary.get("failed_regions", []),
+        "failed_accounts": summary.get("failed_accounts", []),
+        "accounts_scanned": summary.get("accounts_scanned", 1),
+        "coverage": _coverage_block(summary),
         "_meta": report.get("_meta", {})
     })
 
@@ -722,7 +733,269 @@ def api_security():
 @app.get("/api/organization")
 @require_auth
 def api_organization():
-    raise APIError("Cross-account organization scanning is not configured. Run TagSync or configure AWS Organizations.", status_code=501, error_code="NOT_IMPLEMENTED")
+    """Accounts in the latest scan with names/OUs from the Organizations directory."""
+    from src.aws_session import account_directory
+    from src.config import COMPLIANCE_ACCOUNTS
+    report = get_cached_report() or {}
+    accounts = (report.get("summary") or {}).get("accounts") or {}
+    try:
+        directory = account_directory()
+    except Exception:
+        directory = {}
+    rows = []
+    for acct, a in accounts.items():
+        d = directory.get(acct, {})
+        rows.append({"account_id": acct, "name": d.get("name") or acct, "ou": d.get("ou_name") or "",
+                     "total": a.get("total", 0), "compliant": a.get("compliant", 0),
+                     "compliance_pct": a.get("compliance_score", 100.0), "errors": a.get("errors", {})})
+    rows.sort(key=lambda r: r["compliance_pct"])
+    return jsonify({"accounts": rows, "multi_account": bool(COMPLIANCE_ACCOUNTS),
+                    "directory_size": len(directory)})
+
+
+@app.post("/api/organization/refresh")
+@require_permission(AuthorizationPolicy.can_manage_exemptions)
+def api_organization_refresh():
+    """Reload account names and OUs from AWS Organizations."""
+    from src.aws_session import refresh_account_directory
+    directory = refresh_account_directory()
+    return jsonify({"accounts": len(directory)})
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Inventory coverage, leaderboards, owner view
+# ─────────────────────────────────────────────────────────────────────
+
+def _coverage_block(summary: Dict[str, Any]) -> Dict[str, Any]:
+    from src.config import COMPLIANCE_SCOPE, INVENTORY_SOURCE
+    cov = summary.get("coverage") or {}
+    unmapped = cov.get("unmapped_types") or {}
+    return {
+        "inventory_source": cov.get("inventory_source", INVENTORY_SOURCE),
+        "scope": cov.get("scope", COMPLIANCE_SCOPE),
+        "never_tagged": cov.get("never_tagged", 0),
+        "unmapped_resources": sum(unmapped.values()),
+        "unmapped_types": sorted(({"resource_type": k, "count": v} for k, v in unmapped.items()),
+                                 key=lambda r: (-r["count"], r["resource_type"])),
+        "warnings": cov.get("warnings", []),
+    }
+
+
+@app.get("/api/inventory/coverage")
+@require_auth
+def api_inventory_coverage():
+    """What the latest scan could and couldn't see: never-tagged resources and unmapped services."""
+    report = get_cached_report() or {}
+    block = _coverage_block(report.get("summary") or {})
+    block["mapped_types"] = sorted(set(RESOURCE_TYPE_MAP.values()))
+    block["hint"] = ("Unmapped types are discovered but not evaluated. Add them to RESOURCE_TYPE_MAP "
+                     "(src/tag_read.py) or set COMPLIANCE_SCOPE=all to evaluate everything.")
+    if block["inventory_source"] != "resource_explorer":
+        block["hint"] += (" Resources that were never tagged are invisible to the tagging API; "
+                          "set INVENTORY_SOURCE=resource_explorer to include them.")
+    return jsonify(block)
+
+
+@app.get("/api/leaderboard")
+@require_auth
+def api_leaderboard():
+    from src.insights import DIMENSIONS, leaderboard
+    dimension = request.args.get("dimension", "team")
+    if dimension not in DIMENSIONS:
+        raise APIError(f"dimension must be one of {list(DIMENSIONS)}", status_code=400, error_code="INVALID_REQUEST")
+    try:
+        days = max(1, min(int(request.args.get("compare_days", 7)), 90))
+    except ValueError:
+        days = 7
+    return jsonify(leaderboard(dimension, days))
+
+
+@app.get("/api/me/resources")
+@require_auth
+def api_my_resources():
+    """Owner view. Admins may pass ?owner=<value> to see someone else's resources."""
+    from src.insights import owner_identifiers, owner_view
+    identifiers = owner_identifiers(g.identity)
+    requested = (request.args.get("owner") or "").strip().lower()
+    if requested:
+        if not AuthorizationPolicy.can_manage_exemptions(g.identity):
+            raise APIError("Only admins can view another owner's resources.", status_code=403, error_code="FORBIDDEN")
+        identifiers = [requested]
+    report = get_cached_report() or {"regions": {}}
+    rows = _flatten_resources(report)
+    active, _err = _exemptions_cache.get(exemption_manager.list_active_exemptions)
+    include_cost = FINOPS_ENABLED and request.args.get("cost", "1") != "0"
+    view = owner_view(identifiers, rows, active, exemption_manager, include_cost=include_cost)
+    view["_meta"] = report.get("_meta", {})
+    return jsonify(view)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Bulk fix (change sets) and suggestions
+# ─────────────────────────────────────────────────────────────────────
+
+def _bulk_targets(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """{"targets": [{arn, tags}]} or {"arns": [...], "tags": {...}}."""
+    if payload.get("targets"):
+        return payload["targets"]
+    arns = payload.get("arns") or []
+    tags = payload.get("tags") or {}
+    if not isinstance(arns, list):
+        raise APIError("'arns' must be a list", status_code=400, error_code="INVALID_REQUEST")
+    return [{"arn": a, "tags": tags} for a in arns]
+
+
+def _authorize_bulk(targets: List[Dict[str, Any]]) -> None:
+    """Admins/operators may change anything; ApplicationOwners only resources they own."""
+    from src.authorization.roles import Role
+    from src.authorization.ownership import OwnershipResolver
+    identity = g.identity
+    if Role.PLATFORM_ADMIN in identity.roles or Role.TAG_OPERATOR in identity.roles:
+        return
+    if Role.APP_OWNER not in identity.roles:
+        raise APIError("Forbidden. Insufficient permissions to modify tags.", status_code=403, error_code="FORBIDDEN")
+    from src.changesets import fetch_current_tags
+    current = fetch_current_tags([t["arn"] for t in targets])
+    not_owned = [a for a, tags in current.items() if not OwnershipResolver.is_owner(identity, tags)]
+    if not_owned:
+        raise APIError(f"You don't own {len(not_owned)} of these resources.", status_code=403,
+                       error_code="FORBIDDEN", details={"not_owned": not_owned[:20]})
+
+
+@app.post("/api/bulk/preview")
+@require_auth
+def api_bulk_preview():
+    from src import changesets
+    payload = request.get_json(force=True, silent=True) or {}
+    targets = _bulk_targets(payload)
+    return jsonify(changesets.preview(targets, bool(payload.get("overwrite"))))
+
+
+@app.post("/api/bulk/apply")
+@require_auth
+def api_bulk_apply():
+    from src import changesets
+    payload = request.get_json(force=True, silent=True) or {}
+    targets = _bulk_targets(payload)
+    _authorize_bulk(changesets._validate_targets(targets))
+    cs = changesets.apply(targets, bool(payload.get("overwrite")), _actor(), kind="bulk_fix",
+                          description=str(payload.get("description") or "")[:300] or f"Bulk fix of {len(targets)} resources",
+                          preview_token=payload.get("preview_token"), request_id=getattr(g, "request_id", None))
+    return jsonify(cs), 201
+
+
+@app.get("/api/changesets")
+@require_auth
+def api_list_changesets():
+    from src import changesets
+    try:
+        limit = max(1, min(int(request.args.get("limit", 50)), 500))
+    except ValueError:
+        limit = 50
+    return jsonify({"change_sets": changesets.list_change_sets(limit)})
+
+
+@app.get("/api/changesets/<cs_id>")
+@require_auth
+def api_get_changeset(cs_id):
+    from src import changesets
+    cs = changesets.get_change_set(cs_id)
+    if not cs:
+        raise APIError("Change set not found", status_code=404, error_code="NOT_FOUND")
+    return jsonify(cs)
+
+
+@app.post("/api/changesets/<cs_id>/undo")
+@require_tag_modify_permission()
+def api_undo_changeset(cs_id):
+    from src import changesets
+    return jsonify(changesets.undo(cs_id, _actor(), request_id=getattr(g, "request_id", None))), 201
+
+
+@app.post("/api/suggestions")
+@require_auth
+def api_suggestions():
+    from src.suggestions import suggest
+    payload = request.get_json(force=True, silent=True) or {}
+    arns = [a for a in payload.get("arns") or [] if isinstance(a, str)][:500]
+    keys = [k for k in payload.get("keys") or [] if isinstance(k, str)][:20]
+    if not arns or not keys:
+        raise APIError("'arns' and 'keys' are required", status_code=400, error_code="INVALID_REQUEST")
+    return jsonify(suggest(arns, keys, include_creator=bool(payload.get("include_creator"))))
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Tag propagation
+# ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/propagation")
+@require_auth
+def api_propagation():
+    from src import propagation
+    run = propagation.latest_run()
+    return jsonify({
+        "rules": [{"name": k, "label": v["label"]} for k, v in propagation.RULES.items()],
+        "is_running": propagation.is_running(),
+        "last_error": propagation.last_error(),
+        "run": run,
+    })
+
+
+@app.post("/api/propagation/run")
+@require_auth
+def api_propagation_run():
+    from src import propagation
+    from src.cache_manager import resolve_scan_regions
+    payload = request.get_json(force=True, silent=True) or {}
+    rules = payload.get("rules") or None
+    if rules and any(r not in propagation.RULES for r in rules):
+        raise APIError(f"rules must be within {sorted(propagation.RULES)}", status_code=400, error_code="INVALID_REQUEST")
+    regions = payload.get("regions") or resolve_scan_regions()
+    if isinstance(regions, str):
+        regions = [r.strip() for r in regions.split(",") if r.strip()]
+    started = propagation.run_in_background(rules, regions)
+    return jsonify({"status": "started" if started else "already_running"}), 202 if started else 200
+
+
+def _selected_findings(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    from src import propagation
+    run = propagation.latest_run()
+    if not run:
+        raise APIError("Run a propagation check first.", status_code=409, error_code="NO_RUN")
+    ids = set(payload.get("finding_ids") or [])
+    findings = [f for f in run["findings"] if not ids or f["id"] in ids]
+    if not findings:
+        raise APIError("No matching findings.", status_code=400, error_code="INVALID_REQUEST")
+    return findings
+
+
+@app.post("/api/propagation/preview")
+@require_auth
+def api_propagation_preview():
+    from src import changesets, propagation
+    payload = request.get_json(force=True, silent=True) or {}
+    plan = propagation.fix_plan(_selected_findings(payload), bool(payload.get("overwrite")))
+    preview = changesets.preview(plan["targets"], bool(payload.get("overwrite"))) if plan["targets"] else \
+        {"items": [], "summary": {"resources": 0}, "preview_token": changesets.plan_token([])}
+    preview["config_changes"] = plan["ops"]
+    return jsonify(preview)
+
+
+@app.post("/api/propagation/apply")
+@require_tag_modify_permission()
+def api_propagation_apply():
+    from src import changesets, propagation
+    payload = request.get_json(force=True, silent=True) or {}
+    overwrite = bool(payload.get("overwrite"))
+    findings = _selected_findings(payload)
+    plan = propagation.fix_plan(findings, overwrite)
+    if plan["targets"]:
+        _authorize_bulk(plan["targets"])
+    cs = changesets.apply(plan["targets"], overwrite, _actor(), kind="propagation",
+                          description=f"Propagation fix: {len(findings)} findings",
+                          preview_token=payload.get("preview_token"), ops=plan["ops"],
+                          request_id=getattr(g, "request_id", None))
+    return jsonify(cs), 201
 
 
 # ─────────────────────────────────────────────────────────────────────

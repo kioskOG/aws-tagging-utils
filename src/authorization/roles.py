@@ -9,6 +9,7 @@ class Role:
     PLATFORM_ADMIN = "PlatformAdmin"
 
 class UserIdentity:
-    def __init__(self, user_id: str, roles: List[str]):
+    def __init__(self, user_id: str, roles: List[str], email: str = None):
         self.user_id = user_id
         self.roles = roles
+        self.email = email

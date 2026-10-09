@@ -5,1055 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AWS Tagging Dashboard</title>
-  <style>
-    :root {
-      --bg: #030712;
-      --surface: rgba(15, 23, 42, 0.4);
-      --surface-bright: rgba(30, 41, 59, 0.7);
-      --border: rgba(255, 255, 255, 0.08);
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #8b5cf6;
-      --accent-dim: #7c3aed;
-      --accent-glow: rgba(139, 92, 246, 0.4);
-      --danger: #ef4444;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --radius: 16px;
-      --font: "Outfit", "Inter", system-ui, sans-serif;
-      --mono: "Fira Code", "IBM Plex Mono", monospace;
-    }
+  <link rel="stylesheet" href="/static/app.css">
 
-    * {
-      box-sizing: border-box;
-    }
-
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background-color: var(--bg);
-      background-image:
-        radial-gradient(ellipse at top left, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
-        radial-gradient(ellipse at bottom right, rgba(245, 158, 11, 0.1) 0%, transparent 40%);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 15px;
-      line-height: 1.6;
-    }
-
-    .app-container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2.5rem;
-    }
-
-    .brand h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      margin: 0;
-      background: linear-gradient(135deg, #f59e0b, #ef4444, #d946ef, #8b5cf6, #34d399);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -0.03em;
-    }
-
-    .brand p {
-      margin: 0.25rem 0 0;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    /* Tabs */
-    .tabs {
-      display: flex;
-      background: rgba(15, 23, 42, 0.6);
-      backdrop-filter: blur(12px);
-      padding: 6px;
-      border-radius: 100px;
-      border: 1px solid var(--border);
-      gap: 4px;
-      width: fit-content;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    }
-
-    .tab-btn {
-      background: transparent;
-      border: none;
-      color: var(--muted);
-      padding: 0.6rem 1.5rem;
-      border-radius: 100px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .tab-btn:hover {
-      color: var(--text);
-    }
-
-    .tab-btn.active {
-      background: var(--accent);
-      color: white;
-      box-shadow: 0 0 15px var(--accent-glow);
-    }
-
-    .main-grid {
-      display: grid;
-      grid-template-columns: 420px 1fr;
-      gap: 2rem;
-      align-items: start;
-    }
-
-    @media (max-width: 1024px) {
-      .main-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Elements */
-    .card {
-      background: var(--surface);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.75rem;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    }
-
-    .section-title {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: #c4b5fd;
-      font-weight: 700;
-      margin-bottom: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .field {
-      margin-bottom: 1.5rem;
-    }
-
-    label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    input,
-    textarea,
-    select {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 10px;
-      padding: 0.8rem 1rem;
-      font-family: inherit;
-      font-size: 0.95rem;
-      transition: all 0.2s;
-    }
-
-    input:focus,
-    textarea:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
-      background: rgba(0, 0, 0, 0.4);
-    }
-
-    textarea {
-      min-height: 150px;
-      font-family: var(--mono);
-      font-size: 0.85rem;
-      line-height: 1.5;
-    }
-
-    /* Resource List */
-    .type-search-container {
-      position: relative;
-      margin-bottom: 0.75rem;
-    }
-
-    .type-list {
-      max-height: 280px;
-      overflow-y: auto;
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.5rem;
-    }
-
-    .type-item {
-      display: flex;
-      align-items: center;
-      padding: 0.6rem 0.75rem;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.15s;
-      gap: 12px;
-    }
-
-    .type-item:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .type-item input {
-      width: 1.1rem;
-      height: 1.1rem;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-
-    .type-item .label-group {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .type-item .friendly {
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: #e2e8f0;
-    }
-
-    .type-item .aws-raw {
-      font-size: 0.7rem;
-      color: var(--muted);
-      font-family: var(--mono);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Custom Multi-Select */
-    .ms-container {
-      position: relative;
-      width: 100%;
-    }
-
-    .ms-header {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.5rem 0.75rem;
-      min-height: 50px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      transition: all 0.2s;
-    }
-
-    .ms-header:hover {
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .ms-header.focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
-    }
-
-    .ms-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      flex: 1;
-      align-items: center;
-    }
-
-    .ms-tag {
-      background: rgba(139, 92, 246, 0.2);
-      color: #c4b5fd;
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-weight: 500;
-    }
-
-    .ms-tag-rm {
-      cursor: pointer;
-      opacity: 0.7;
-    }
-
-    .ms-tag-rm:hover {
-      opacity: 1;
-      color: #fff;
-    }
-
-    .ms-placeholder {
-      color: var(--muted);
-      font-size: 0.95rem;
-      padding-left: 4px;
-    }
-
-    .ms-arrow {
-      color: var(--muted);
-      margin-left: 10px;
-      transition: transform 0.2s;
-    }
-
-    .ms-container.open .ms-arrow {
-      transform: rotate(180deg);
-    }
-
-    .ms-dropdown {
-      position: absolute;
-      top: calc(100% + 8px);
-      left: 0;
-      right: 0;
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-      z-index: 100;
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-      animation: msSlideIn 0.2s Math.easeOut;
-    }
-
-    @keyframes msSlideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-8px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .ms-container.open .ms-dropdown {
-      display: flex;
-    }
-
-    .ms-controls {
-      display: flex;
-      gap: 8px;
-      padding: 10px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.2);
-    }
-
-    .ms-list {
-      max-height: 250px;
-      overflow-y: auto;
-      padding: 6px;
-    }
-
-    .ms-opt {
-      display: flex;
-      align-items: center;
-      padding: 8px 10px;
-      border-radius: 8px;
-      cursor: pointer;
-      gap: 12px;
-    }
-
-    .ms-opt:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .ms-opt input {
-      width: 1.1rem;
-      height: 1.1rem;
-      accent-color: var(--accent);
-      cursor: pointer;
-      padding: 0;
-      margin: 0;
-      pointer-events: none;
-    }
-
-    .ms-opt-text {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .ms-opt-name {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #e2e8f0;
-    }
-
-    .ms-opt-id {
-      font-size: 0.65rem;
-      color: var(--muted);
-      font-family: var(--mono);
-    }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 0.8rem 1.5rem;
-      border-radius: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      font-family: inherit;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #8b5cf6, #d946ef);
-      color: white;
-      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
-      filter: brightness(1.1);
-    }
-
-    .btn-success {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-    }
-
-    .btn-success:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-      filter: brightness(1.1);
-    }
-
-    .btn-gov-style {
-      background: linear-gradient(135deg, #8b5cf6, #d946ef);
-      color: white;
-      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-    }
-
-    .btn-gov-style:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
-      filter: brightness(1.1);
-    }
-
-    .btn-outline {
-      background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: var(--text);
-    }
-
-    .btn-outline:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--muted);
-      padding: 0.4rem 0.8rem;
-      font-size: 0.85rem;
-      border: none;
-      cursor: pointer;
-      border-radius: 6px;
-      font-weight: 500;
-    }
-
-    .btn-ghost:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-      filter: none;
-    }
-
-    /* Tags */
-    .tag-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 40px;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .tag-row .rm {
-      background: rgba(239, 68, 68, 0.1);
-      border: none;
-      color: var(--danger);
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1.2rem;
-      transition: background 0.2s;
-    }
-
-    .tag-row .rm:hover {
-      background: rgba(239, 68, 68, 0.2);
-    }
-
-    /* Table */
-    .table-container {
-      overflow-x: auto;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.2);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.9rem;
-    }
-
-    th {
-      background: rgba(0, 0, 0, 0.4);
-      padding: 1rem;
-      font-weight: 600;
-      color: var(--muted);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      border-bottom: 1px solid var(--border);
-      letter-spacing: 0.05em;
-    }
-
-    td {
-      padding: 1rem;
-      border-top: 1px solid var(--border);
-      vertical-align: middle;
-    }
-
-    .arn-cell {
-      font-family: var(--mono);
-      font-size: 0.75rem;
-      color: var(--muted);
-      word-break: break-all;
-      max-width: 400px;
-    }
-
-    .name-cell {
-      font-weight: 600;
-      color: #c4b5fd;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      padding: 3px 10px;
-      border-radius: 100px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      margin: 2px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      letter-spacing: 0.02em;
-    }
-
-    .status-badge.ok {
-      background: rgba(16, 185, 129, 0.1);
-      color: var(--success);
-      border-color: rgba(16, 185, 129, 0.2);
-    }
-
-    .status-badge.err {
-      background: rgba(239, 68, 68, 0.1);
-      color: var(--danger);
-      border-color: rgba(239, 68, 68, 0.2);
-    }
-
-    .status-badge.info {
-      background: rgba(139, 92, 246, 0.1);
-      color: #c4b5fd;
-      border-color: rgba(139, 92, 246, 0.2);
-    }
-
-    /* Result Actions */
-    .result-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.25rem;
-    }
-
-    .empty-state {
-      padding: 8rem 2rem;
-      text-align: center;
-      color: var(--muted);
-    }
-
-    .empty-state svg {
-      width: 48px;
-      height: 48px;
-      margin-bottom: 1rem;
-      opacity: 0.2;
-      color: #c084fc;
-    }
-
-    #json-output-container {
-      display: none;
-      margin-top: 1.5rem;
-    }
-
-    .loading-spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-radius: 50%;
-      border-top-color: #fff;
-      animation: spin 0.8s linear infinite;
-    }
-
-    /* Checkbox list generic */
-    .checkbox-container {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .checkbox-container input {
-      width: 1.1rem;
-      height: 1.1rem;
-      accent-color: var(--accent);
-      cursor: pointer;
-      margin: 0;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* Toast */
-    #toast-container {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      pointer-events: none;
-    }
-
-    .toast {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 20px;
-      border-radius: 12px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      backdrop-filter: blur(20px);
-      border: 1px solid;
-      min-width: 280px;
-      max-width: 420px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      animation: toastIn 0.3s ease;
-      pointer-events: all;
-    }
-
-    @keyframes toastIn {
-      from {
-        opacity: 0;
-        transform: translateX(20px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    .toast-success {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.3);
-      color: #6ee7b7;
-    }
-
-    .toast-error {
-      background: rgba(239, 68, 68, 0.15);
-      border-color: rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
-    }
-
-    .toast-info {
-      background: rgba(139, 92, 246, 0.15);
-      border-color: rgba(139, 92, 246, 0.3);
-      color: #c4b5fd;
-    }
-
-    /* Stats bar */
-    .stats-bar {
-      display: flex;
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-
-    .stat-card {
-      flex: 1;
-      min-width: 250px;
-      background: rgba(15, 23, 42, 0.6);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      padding: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1.25rem;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-5px);
-      border-color: rgba(255, 255, 255, 0.2);
-      background: rgba(15, 23, 42, 0.8);
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
-    }
-
-    .stat-card:hover .stat-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-
-    .stat-sub {
-      font-size: 0.75rem;
-      color: var(--muted);
-      opacity: 0.8;
-    }
-
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
-    .stat-card:hover {
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .stat-label {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-
-
-    .stat-value.blue {
-      color: #a78bfa;
-    }
-
-    .stat-value.green {
-      color: #34d399;
-    }
-
-    .stat-value.yellow {
-      color: #fbbf24;
-    }
-
-    .stat-value.purple {
-      color: #a78bfa;
-    }
-
-    .stat-sub {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
-    /* Compliance score ring */
-    .score-ring {
-      display: flex;
-      align-items: center;
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .ring-wrap {
-      position: relative;
-      width: 120px;
-      height: 120px;
-      flex-shrink: 0;
-    }
-
-    .ring-wrap svg {
-      width: 120px;
-      height: 120px;
-      transform: rotate(-90deg);
-    }
-
-    .ring-label {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-    }
-
-    .ring-pct {
-      font-size: 1.6rem;
-      font-weight: 700;
-      line-height: 1;
-    }
-
-    .ring-sub {
-      font-size: 0.65rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    .score-meta {
-      flex: 1;
-    }
-
-    .score-meta h3 {
-      font-size: 1.3rem;
-      font-weight: 700;
-      margin: 0 0 8px;
-    }
-
-    .score-meta p {
-      color: var(--muted);
-      font-size: 0.9rem;
-      margin: 0;
-    }
-
-    /* Region section header */
-    .region-section {
-      margin-bottom: 1.5rem;
-    }
-
-    .region-section-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      cursor: pointer;
-    }
-
-    .region-section-title h4 {
-      margin: 0;
-      font-size: 0.9rem;
-      color: #c4b5fd;
-    }
-
-    .region-badge {
-      font-size: 0.75rem;
-      padding: 2px 8px;
-      border-radius: 100px;
-      background: rgba(139, 92, 246, 0.15);
-      color: #c4b5fd;
-      border: 1px solid rgba(139, 92, 246, 0.2);
-    }
-
-    /* Sync result */
-    .sync-resource-list {
-      font-family: var(--mono);
-      font-size: 0.75rem;
-      color: var(--muted);
-      line-height: 2;
-      padding: 10px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      max-height: 300px;
-      overflow-y: auto;
-    }
-
-    /* Tab badge */
-    .tab-badge {
-      background: rgba(239, 68, 68, 0.8);
-      color: white;
-      font-size: 0.6rem;
-      border-radius: 100px;
-      padding: 1px 6px;
-      margin-left: 4px;
-      font-weight: 700;
-    }
-
-    /* Premium Scrollbars */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.1);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(139, 92, 246, 0.2);
-      border-radius: 10px;
-      border: 2px solid transparent;
-      background-clip: content-box;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(139, 92, 246, 0.4);
-      border-radius: 10px;
-      border: 2px solid transparent;
-      background-clip: content-box;
-    }
-
-    /* Card Animations */
-    .card {
-      transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .card:hover {
-      border-color: rgba(139, 92, 246, 0.3);
-      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
-    }
-
-    /* Stats Animation */
-
-
-    .stat-card:hover
-
-    /* Table Improvements */
-    tr.filtered {
-      display: none;
-    }
-
-    .name-cell {
-      color: #a78bfa;
-      transition: color 0.2s;
-    }
-
-    tr:hover .name-cell {
-      color: #c4b5fd;
-    }
-
-    /* Help Tooltip */
-    .help-icon {
-      display: inline-flex;
-      width: 14px;
-      height: 14px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 50%;
-      font-size: 10px;
-      align-items: center;
-      justify-content: center;
-      margin-left: 4px;
-      cursor: help;
-      color: var(--muted);
-    }
-
-    .help-icon:hover {
-      background: rgba(255, 255, 255, 0.2);
-      color: var(--text);
-    }
-
-    .btn:hover {
-      box-shadow: 0 0 20px var(--accent-glow);
-    }
-
-    .btn-success:hover {
-      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
-    }
-
-    .btn-gov-style:hover {
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
-    }
-
-
-    .stat-card {
-      flex: 1;
-      min-width: 250px;
-      background: rgba(15, 23, 42, 0.6);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      padding: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1.25rem;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-5px);
-      border-color: rgba(255, 255, 255, 0.2);
-      background: rgba(15, 23, 42, 0.8);
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
-    }
-
-    .stat-card:hover .stat-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-
-    .stat-sub {
-      font-size: 0.75rem;
-      color: var(--muted);
-      opacity: 0.8;
-    }
-  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -1098,65 +51,427 @@
         </div>
       </div>
     </div>
-    <header>
+        <header>
       <div class="brand">
-        <div style="display:flex; align-items:center; gap:12px">
-          <h1>AWS Tagging Dashboard</h1><button class="btn-ghost"
-            onclick="loadMeta(); toast('Refreshing metadata...', 'info')"
-            style="padding:4px; border:1px solid var(--border); border-radius:4px"
-            title="Refresh AWS Metadata">🔄</button>
-        </div>
-        <p>Enterprise Resource Governance & Discovery</p>
+        <h1>AWS Tagging Utils</h1>
+        <p>Enterprise Governance, FinOps &amp; Security</p>
       </div>
-      <div class="tabs" role="tablist">
-        <button type="button" class="tab-btn active" data-tab="read">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          Resource Discovery
-        </button>
-        <button type="button" class="tab-btn" data-tab="write">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-          </svg>
-          Batch Tagging
-        </button>
-        <button type="button" class="tab-btn" data-tab="gov">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-          </svg>
-          Governance Scan
-        </button>
-        <button type="button" class="tab-btn" data-tab="report">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-          </svg>
-          Compliance Report
-        </button>
-        <button type="button" class="tab-btn" data-tab="sync">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10" />
-            <polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-          </svg>
-          VPC Tag Sync
-        </button>
+      <div id="identity-badge" class="identity-badge" title="Signed-in identity and roles (from the server)">
+        <span class="identity-user">Loading…</span>
       </div>
     </header>
 
+
+    <!-- Enterprise Navigation -->
+    <div class="tabs" style="margin-bottom: 2rem; flex-wrap: wrap;">
+      <button class="tab-btn active" data-tab="dashboard" id="ent-tab-dashboard">📈 Dashboard</button>
+      <button class="tab-btn" data-tab="compliance" id="ent-tab-compliance">✅ Compliance</button>
+      <button class="tab-btn" data-tab="mine" id="ent-tab-mine">👤 My Resources</button>
+      <button class="tab-btn" data-tab="finops" id="ent-tab-finops">💰 FinOps</button>
+      <button class="tab-btn" data-tab="security" id="ent-tab-security">🔒 Security</button>
+      <button class="tab-btn" data-tab="enforcement" id="ent-tab-enforcement">⚖️ Enforcement</button>
+      <button class="tab-btn" data-tab="organization" id="ent-tab-organization">🏆 Leaderboard</button>
+      <button class="tab-btn" data-tab="propagation" id="ent-tab-propagation">🔗 Propagation</button>
+      <button class="tab-btn" data-tab="changes" id="ent-tab-changes">↩️ Changes</button>
+      <button class="tab-btn" data-tab="schema" id="ent-tab-schema">📋 Schema</button>
+      <button class="tab-btn" data-tab="cicd" id="ent-tab-cicd">🚀 CI/CD</button>
+      <button class="tab-btn" data-tab="legacy" id="ent-tab-legacy">🛠️ Tag Tools</button>
+    </div>
+
+    <div id="compliance-status-bar" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 20px; border-radius: 8px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.05);">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <span id="meta-status-text" style="font-weight: 500; font-size: 0.95rem; color: #cbd5e1;">Loading...</span>
+        <span id="meta-last-updated" style="font-size: 0.8rem; color: var(--muted);">Checking cache status...</span>
+      </div>
+      <div>
+        <button id="btn-refresh-compliance" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem;" onclick="triggerBackgroundRefresh()">
+          <span class="icon">↻</span> Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── ENTERPRISE VIEWS ──────────────────────────────────────────── -->
+
+    <!-- DASHBOARD -->
+    <div id="view-ent-dashboard" class="ent-view">
+      <div class="section-title">📈 EXECUTIVE OVERVIEW</div>
+      <div class="stats-bar" style="flex-wrap: wrap; margin-bottom: 2rem;">
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Overall Compliance</div>
+          <div class="stat-value blue" id="dash-compliance">--%</div>
+          <div class="stat-sub">across all accounts</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Total Monthly Spend</div>
+          <div class="stat-value green" id="dash-spend">$--</div>
+          <div class="stat-sub">AWS Cost Explorer</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Active Violations</div>
+          <div class="stat-value red" id="dash-violations">--</div>
+          <div class="stat-sub">requiring action</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Tag Allocation %</div>
+          <div class="stat-value green" id="dash-allocation">--%</div>
+          <div class="stat-sub">estimated attribution</div>
+        </div></div>
+      </div>
+      <div id="dash-failed-regions" class="banner banner-warn" style="display:none;"></div>
+      <div class="card" id="dash-coverage" style="margin-bottom: 1.5rem;">
+        <div class="chart-head">
+          <div>
+            <div class="section-title" style="margin:0;">Inventory coverage</div>
+            <div class="chart-sub" id="dash-coverage-sub">How much of the account the latest scan could see</div>
+          </div>
+          <a class="btn-ghost" href="#schema" onclick="document.getElementById('ent-tab-schema').click(); return false;">Details</a>
+        </div>
+        <div class="coverage-grid" id="dash-coverage-body"><div class="chart-empty">No scan yet.</div></div>
+      </div>
+      <div class="card chart-card" style="margin-bottom: 1.5rem;">
+        <div class="chart-head">
+          <div>
+            <div class="section-title" style="margin:0;">Compliance trend</div>
+            <div class="chart-sub">Compliance score per completed scan (%)</div>
+          </div>
+          <button class="btn-ghost" onclick="toggleTrendTable()" id="trend-table-toggle">View as table</button>
+        </div>
+        <div id="dash-trend" class="chart-body"><div class="chart-empty">No scans yet. Run a compliance refresh to start the trend.</div></div>
+        <div id="dash-trend-table" style="display:none;"></div>
+      </div>
+      <div class="dash-grid-2" style="margin-bottom: 1.5rem;">
+        <div class="card chart-card">
+          <div class="section-title">Top violations</div>
+          <div class="chart-sub">Resources affected, by tag and violation type</div>
+          <div id="dash-top-violations" class="chart-body"><div class="chart-empty">No violations in the latest scan.</div></div>
+        </div>
+        <div class="card chart-card">
+          <div class="section-title">Compliance by service</div>
+          <div class="chart-sub">Lowest first · % of resources compliant</div>
+          <div id="dash-by-service" class="chart-body"><div class="chart-empty">No resources in the latest scan.</div></div>
+        </div>
+      </div>
+      <div class="dash-grid-3">
+        <div class="card">
+          <div class="section-title">Resources</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Total</span><strong id="dash-total-res">--</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Compliant</span><strong class="status-badge ok" id="dash-comp-res">--</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Non-Compliant</span><strong class="status-badge err" id="dash-noncomp-res">--</strong></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title">Remediation</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Pending</span><strong class="status-badge err" id="dash-pending">--</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Active Exemptions</span><strong class="status-badge info" id="dash-exemptions">--</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Protected Violations</span><strong class="status-badge err" id="dash-protected">--</strong></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title">Security</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Drift Events</span><strong class="status-badge err" id="dash-drift">--</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Auto-Reverted</span><strong class="status-badge ok" id="dash-reverted">--</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color:var(--muted)">Pending Review</span><strong class="status-badge info" id="dash-pending-sec">--</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPLIANCE -->
+    <div id="view-ent-compliance" class="ent-view" style="display:none;">
+      <div class="section-title">✅ RESOURCE COMPLIANCE</div>
+      <div style="display: flex; gap: 10px; margin-bottom: 1.25rem; flex-wrap: wrap;">
+        <select id="comp-filter-status" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">All Statuses</option>
+          <option value="COMPLIANT">Compliant</option>
+          <option value="NON_COMPLIANT">Non-Compliant</option>
+        </select>
+        <select id="comp-filter-service" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">All Services</option>
+        </select>
+        <select id="comp-filter-region" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">All Regions</option>
+        </select>
+        <select id="comp-filter-issue" style="width: auto; font-size: 0.85rem;" onchange="filterComplianceTable()">
+          <option value="">Any Issue</option>
+          <option value="MISSING_REQUIRED">Missing tag</option>
+          <option value="INVALID_VALUE">Invalid value</option>
+          <option value="INVALID_FORMAT">Invalid format</option>
+          <option value="NORMALIZATION_CONFLICT">Conflicting aliases</option>
+          <option value="UNKNOWN_TAG">Unknown tag</option>
+          <option value="NEVER_TAGGED">Never tagged</option>
+          <option value="EXEMPT">Exempted</option>
+        </select>
+        <input type="text" id="comp-filter-text" placeholder="Filter by ARN, account or tag value..." style="flex: 1; min-width: 200px; font-size: 0.85rem;" oninput="filterComplianceTable()">
+        <a class="btn btn-outline" href="/api/compliance/export.csv" style="padding: 8px 14px; font-size: 0.85rem; text-decoration:none;">⬇ Export CSV</a>
+      </div>
+      <div class="bulk-bar">
+        <div id="comp-result-count" class="chart-sub"></div>
+        <div class="bulk-actions">
+          <span id="bulk-selected-count" class="chart-sub">0 selected</span>
+          <button class="btn-ghost" onclick="selectAllFiltered(true)">Select all filtered</button>
+          <button class="btn-ghost" onclick="selectAllFiltered(false)">Clear</button>
+          <button class="btn btn-primary bulk-primary" id="btn-bulk-fix" data-perm="modify_tags" onclick="openBulkFix()" disabled>Bulk fix…</button>
+        </div>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead><tr>
+            <th style="width:32px"><input type="checkbox" id="comp-select-page" title="Select this page" onclick="selectPage(this.checked)"></th>
+            <th>Resource ID</th><th>Account</th><th>Type</th><th>Status</th>
+            <th>Tags</th><th>Issues</th><th>Exemption</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="compliance-table-body"><tr><td colspan="9" class="empty-state" style="text-align:center; padding: 2rem; color:var(--muted);">Loading compliance data...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FINOPS -->
+    <div id="view-ent-finops" class="ent-view" style="display:none;">
+      <div class="section-title">💰 FINOPS &amp; COST ATTRIBUTION</div>
+      <div class="card" style="margin-bottom: 1.5rem; border-left: 3px solid var(--warning);">
+        <p style="margin: 0; font-size: 0.88rem; color: var(--muted);">
+          ⚠️ <strong>Attribution Transparency:</strong>
+          <em>Actual AWS Tagged Spend</em> is reported directly from AWS Cost Explorer.
+          <em>Potentially Unallocated Spend</em> is estimated — some AWS services don't provide resource-level cost attribution.
+          Cost Explorer data may be up to 24 hours delayed.
+        </p>
+      </div>
+      <div class="stats-bar" style="flex-wrap: wrap; margin-bottom: 2rem;">
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Total Spend</div>
+          <div class="stat-value" id="finops-total">$--</div>
+          <div class="stat-sub">current month</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">AWS-Reported Tagged</div>
+          <div class="stat-value green" id="finops-tagged">$--</div>
+          <div class="stat-sub">actual Cost Explorer data</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Untagged Spend</div>
+          <div class="stat-value red" id="finops-untagged">$--</div>
+          <div class="stat-sub">attribution gap</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Potentially Unallocated</div>
+          <div class="stat-value yellow" id="finops-unallocated">$--</div>
+          <div class="stat-sub">allocation estimate</div>
+        </div></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Cost Allocation Tags (Activated)</div>
+        <div id="finops-tags-list" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+      </div>
+    </div>
+
+    <!-- SECURITY -->
+    <div id="view-ent-security" class="ent-view" style="display:none;">
+      <div class="section-title">🔒 SECURITY &amp; PROTECTED-TAG DRIFT</div>
+      <div class="stats-bar" style="flex-wrap: wrap; margin-bottom: 2rem;">
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Protected Violations</div>
+          <div class="stat-value red" id="sec-protected">--</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Unauthorized Changes</div>
+          <div class="stat-value red" id="sec-unauth">--</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Auto-Reverted</div>
+          <div class="stat-value green" id="sec-reverted">--</div>
+        </div></div>
+        <div class="stat-card"><div class="stat-info">
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-value yellow" id="sec-pending">--</div>
+        </div></div>
+      </div>
+      <div class="section-title" style="margin-top: 1.5rem;">Recent Drift Events</div>
+      <div class="table-container">
+        <table>
+          <thead><tr>
+            <th>Resource</th><th>Tag</th><th>Expected</th><th>Actual</th>
+            <th>Changed By</th><th>Changed At</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="drift-table-body"><tr><td colspan="8" style="text-align:center; padding: 2rem; color:var(--muted);">Loading drift events...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ENFORCEMENT / REMEDIATION / AUDIT -->
+    <div id="view-ent-enforcement" class="ent-view" style="display:none;">
+      <div class="section-title">⚖️ REMEDIATION TASKS</div>
+      <div class="table-container" style="margin-bottom: 2rem;">
+        <table>
+          <thead><tr><th>Resource</th><th>Account</th><th>Violation</th><th>Detected</th><th>Deadline</th><th>Status</th><th>Last Action</th></tr></thead>
+          <tbody id="remediation-table-body"><tr><td colspan="7" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="section-title">ACTIVE EXEMPTIONS</div>
+      <div class="table-container" style="margin-bottom: 2rem;">
+        <table>
+          <thead><tr><th>Scope</th><th>Reason</th><th>Owner</th><th>Expiration</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="exemptions-table-body"><tr><td colspan="6" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="section-title">AUDIT LOG</div>
+      <div class="table-container">
+        <table>
+          <thead><tr><th>Timestamp</th><th>Action</th><th>Resource</th><th>Actor</th><th>Result</th><th>Reason</th></tr></thead>
+          <tbody id="audit-table-body"><tr><td colspan="6" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MY RESOURCES -->
+    <div id="view-ent-mine" class="ent-view" style="display:none;">
+      <div class="section-title">👤 MY RESOURCES</div>
+      <div class="bulk-bar">
+        <div class="chart-sub" id="mine-identity">Resources whose Owner tag matches you.</div>
+        <div class="bulk-actions" id="mine-admin" style="display:none;">
+          <input type="text" id="mine-owner" placeholder="View as owner (admins)…" style="font-size:0.85rem; width:240px;">
+          <button class="btn-ghost" onclick="loadMine()">View</button>
+        </div>
+      </div>
+      <div class="stats-bar" style="margin-bottom: 1.5rem;">
+        <div class="stat-card"><div class="stat-info"><div class="stat-label">My resources</div><div class="stat-value" id="mine-total">--</div><div class="stat-sub" id="mine-pct">compliant</div></div></div>
+        <div class="stat-card"><div class="stat-info"><div class="stat-label">Need attention</div><div class="stat-value red" id="mine-noncomp">--</div><div class="stat-sub">non-compliant</div></div></div>
+        <div class="stat-card"><div class="stat-info"><div class="stat-label">Exemptions expiring</div><div class="stat-value yellow" id="mine-expiring">--</div><div class="stat-sub" id="mine-expiring-sub">soon</div></div></div>
+        <div class="stat-card"><div class="stat-info"><div class="stat-label">Unallocated share</div><div class="stat-value yellow" id="mine-unalloc">--</div><div class="stat-sub" id="mine-cost-sub">of my month-to-date spend</div></div></div>
+      </div>
+      <div id="mine-cost-note" class="banner banner-warn" style="display:none;"></div>
+      <div class="dash-grid-2" style="margin-bottom: 1.5rem;">
+        <div class="card chart-card"><div class="section-title">My top violations</div><div id="mine-violations" class="chart-body"></div></div>
+        <div class="card"><div class="section-title">Exemptions expiring soon</div><div id="mine-exemptions"></div></div>
+      </div>
+      <div class="bulk-bar">
+        <div class="chart-sub" id="mine-count"></div>
+        <div class="bulk-actions"><button class="btn btn-primary bulk-primary" data-perm="modify_tags" onclick="openBulkFix(mineNonCompliant())">Fix all mine…</button></div>
+      </div>
+      <div class="table-container">
+        <table><thead><tr><th>Resource</th><th>Type</th><th>Status</th><th>Tags</th><th>Issues</th></tr></thead>
+        <tbody id="mine-table-body"><tr><td colspan="5" style="text-align:center; padding: 2rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD (organization) -->
+    <div id="view-ent-organization" class="ent-view" style="display:none;">
+      <div class="section-title">🏆 COMPLIANCE LEADERBOARD</div>
+      <div class="bulk-bar">
+        <div class="segmented" id="lb-dimension">
+          <button data-dim="team" class="active">Team</button>
+          <button data-dim="account">Account</button>
+          <button data-dim="ou">OU</button>
+          <button data-dim="service">Service</button>
+        </div>
+        <div class="chart-sub" id="lb-compared"></div>
+      </div>
+      <div id="lb-improved" class="chip-row"></div>
+      <div class="table-container" style="margin-bottom: 2rem;">
+        <table><thead><tr><th style="width:48px">#</th><th>Name</th><th style="width:38%">Compliance</th><th>Week over week</th><th>Resources</th><th>Non-compliant</th></tr></thead>
+        <tbody id="lb-table-body"><tr><td colspan="6" style="text-align:center; padding: 2rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+      </div>
+      <div class="bulk-bar">
+        <div class="section-title" style="margin:0;">ACCOUNTS SCANNED</div>
+        <button class="btn-ghost" data-perm="manage_exemptions" onclick="refreshOrgDirectory()">Refresh names & OUs</button>
+      </div>
+      <div class="table-container">
+        <table><thead><tr><th>Account</th><th>OU</th><th>Compliance %</th><th>Resources</th><th>Scan errors</th></tr></thead>
+        <tbody id="org-table-body"><tr><td colspan="5" style="text-align:center; padding: 2rem; color:var(--muted);">Loading...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- PROPAGATION -->
+    <div id="view-ent-propagation" class="ent-view" style="display:none;">
+      <div class="section-title">🔗 TAG PROPAGATION</div>
+      <p class="chart-sub" style="margin-top:0">Children that don't carry their parent's tags — the usual reason "we tagged it but the cost is still untagged". Name and aws:* tags are never propagated.</p>
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div id="prop-rules" class="rule-grid"></div>
+        <div class="bulk-bar" style="margin: 1rem 0 0;">
+          <div class="chart-sub" id="prop-status">No check run yet.</div>
+          <button class="btn btn-primary bulk-primary" id="btn-prop-run" onclick="runPropagation()">Run check</button>
+        </div>
+      </div>
+      <div id="prop-summary" class="chip-row"></div>
+      <div class="bulk-bar">
+        <div class="bulk-actions">
+          <select id="prop-filter-rule" onchange="renderPropagation()" style="width:auto;font-size:0.85rem"><option value="">All rules</option></select>
+          <select id="prop-filter-kind" onchange="renderPropagation()" style="width:auto;font-size:0.85rem">
+            <option value="">Tags & config</option><option value="tags">Missing/mismatched tags</option><option value="config">Propagation switched off</option>
+          </select>
+          <label class="chart-sub" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="prop-overwrite"> Overwrite mismatched values</label>
+        </div>
+        <div class="bulk-actions">
+          <span class="chart-sub" id="prop-selected">0 selected</span>
+          <button class="btn-ghost" onclick="propSelectAll(true)">Select all shown</button>
+          <button class="btn btn-primary bulk-primary" data-perm="modify_tags" onclick="previewPropagationFix()">Preview fix…</button>
+        </div>
+      </div>
+      <div class="table-container">
+        <table><thead><tr><th style="width:32px"></th><th>Rule</th><th>Parent</th><th>Child / setting</th><th>Missing</th><th>Mismatched</th></tr></thead>
+        <tbody id="prop-table-body"><tr><td colspan="6" style="text-align:center; padding: 2rem; color:var(--muted);">Run a check to see findings.</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- CHANGES (change sets) -->
+    <div id="view-ent-changes" class="ent-view" style="display:none;">
+      <div class="section-title">↩️ CHANGE SETS</div>
+      <p class="chart-sub" style="margin-top:0">Every bulk fix and propagation fix is recorded here and can be undone. Undo skips keys someone changed since.</p>
+      <div class="table-container">
+        <table><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Description</th><th>Result</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="changes-table-body"><tr><td colspan="7" style="text-align:center; padding: 2rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- SCHEMA -->
+    <div id="view-ent-schema" class="ent-view" style="display:none;">
+      <div class="section-title">📋 GOVERNANCE SCHEMA (from tag-schema.yaml)</div>
+      <p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem;">
+        This schema is the single source of truth from the backend <code>SchemaProvider</code>. Changes require updating the YAML configuration.
+      </p>
+      <div class="table-container">
+        <table>
+          <thead><tr><th>Tag</th><th>Required</th><th>Protected</th><th>FinOps</th><th>Allowed Values</th><th>Regex</th><th>Description</th></tr></thead>
+          <tbody id="schema-table-body"><tr><td colspan="7" style="text-align:center; padding: 2rem; color:var(--muted);">Loading schema...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="section-title" style="margin-top: 2rem;">🔭 DISCOVERED BUT NOT EVALUATED</div>
+      <p class="chart-sub" id="coverage-hint" style="margin-top:0"></p>
+      <div class="table-container">
+        <table><thead><tr><th>Resource type</th><th>Resources found</th></tr></thead>
+        <tbody id="coverage-table-body"><tr><td colspan="2" style="text-align:center; padding: 1.5rem; color:var(--muted);">Loading…</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- CI/CD -->
+    <div id="view-ent-cicd" class="ent-view" style="display:none;">
+      <div class="section-title">🚀 CI/CD PIPELINE VALIDATION (SARIF)</div>
+      <p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem;">
+        Validation results are generated by the CLI: <code>aws-tagging-utils validate terraform --format sarif</code>
+      </p>
+      <div class="table-container">
+        <table>
+          <thead><tr><th>Repository</th><th>Branch</th><th>Commit</th><th>Status</th><th>Violations</th><th>Actions</th></tr></thead>
+          <tbody id="cicd-table-body"><tr><td colspan="6" style="text-align:center; padding: 2rem; color:var(--muted);">Loading CI/CD runs...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LEGACY TAG TOOLS (existing sidebar+main grid) -->
+    <div id="view-ent-legacy" class="ent-view" style="display:none;">
     <div class="main-grid">
       <!-- Sidebar / Config -->
       <aside>
+        <nav class="legacy-nav" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 2rem;">
+          <button class="legacy-nav-btn active" data-legacy-tab="read" style="text-align: left; padding: 10px; background: transparent; border: 1px solid var(--border); color: var(--text); cursor: pointer; border-radius: 6px;">1. Query / Discovery</button>
+          <button class="legacy-nav-btn" data-legacy-tab="write" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">2. Batch Tagging</button>
+          <button class="legacy-nav-btn" data-legacy-tab="gov" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">3. Auto-Tagging</button>
+          <button class="legacy-nav-btn" data-legacy-tab="report" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">4. Compliance Audit</button>
+          <button class="legacy-nav-btn" data-legacy-tab="sync" style="text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; border-radius: 6px;">5. Tag Propagator</button>
+        </nav>
+
         <!-- Read Panel Config -->
         <div id="config-read" class="card config-panel active">
           <div class="section-title">Query Parameters</div>
@@ -1284,24 +599,45 @@
 
         <!-- Sync Panel Config -->
         <div id="config-sync" class="card config-panel" style="display: none;">
-          <div class="section-title">VPC Tag Propagation</div>
+          <div class="section-title">Tag Propagation</div>
           <div class="field">
             <label>Target Region</label>
             <div id="sync-region-picker"></div>
           </div>
           <div class="field">
-            <label for="sync-vpc-id">Parent VPC ID</label>
-            <input id="sync-vpc-id" type="text" placeholder="vpc-0a1b2c3d4e5f67890">
+            <label for="sync-rule">Parent type</label>
+            <select id="sync-rule">
+              <option value="vpc">VPC → subnets, SGs, route tables, gateways, NACLs, endpoints</option>
+              <option value="ec2_instance">EC2 instance → EBS volumes & network interfaces</option>
+              <option value="ebs_volume">EBS volume → snapshots</option>
+              <option value="asg">Auto Scaling group → instances (+ PropagateAtLaunch)</option>
+              <option value="ecs_service">ECS service → tasks (+ propagateTags)</option>
+              <option value="cloudformation">CloudFormation stack → its resources</option>
+              <option value="rds_cluster">RDS cluster → DB instances</option>
+              <option value="eks_cluster">EKS cluster → node groups</option>
+              <option value="elbv2">Load balancer → target groups</option>
+              <option value="lambda">Lambda function → log group</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sync-vpc-id">Parent ID, name or ARN</label>
+            <input id="sync-vpc-id" type="text" placeholder="vpc-0a1b2c3d4e5f67890 / my-asg / my-stack">
+          </div>
+          <div class="field" style="display:flex; gap:8px; align-items:center;">
+            <input type="checkbox" id="sync-overwrite" style="width:auto"> <label for="sync-overwrite" style="margin:0">Overwrite child values that differ</label>
           </div>
           <div class="field"
             style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; font-size: 0.85rem; color: var(--muted);">
-            Propagates all tags from the parent VPC to its child resources — Subnets, Security Groups, Route Tables,
-            Internet Gateways, and NAT Gateways.
+            Copies the parent's governance tags to its children. <b>Name</b> and <b>aws:*</b> tags are never copied.
+            Preview first; applied changes can be undone from the Changes tab.
           </div>
-          <button class="btn btn-primary" id="btn-sync"
-            style="width: 100%; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#8b5cf6,#d946ef);">
-            Propagate VPC Tags
-          </button>
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-outline" id="btn-sync-preview" style="flex:1; height: 50px;">Preview</button>
+            <button class="btn btn-primary" id="btn-sync"
+              style="flex:1; height: 50px; font-size: 1rem; background: linear-gradient(135deg,#8b5cf6,#d946ef);">
+              Propagate
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -1346,728 +682,98 @@
         </div>
       </main>
     </div>
+    </div>
+    </div>
+    <!-- ─── END ENTERPRISE VIEWS ──────────────────────────────────────────── -->
+
+    <!-- ─── FIX TAGS MODAL ──────────────────────────────────────────────── -->
+    <div id="fix-tags-modal" style="
+        display:none; position:fixed; inset:0;
+        background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
+        z-index:9999; align-items:center; justify-content:center;
+    ">
+      <div style="
+          background:var(--card-bg); border:1px solid rgba(255,255,255,0.08);
+          border-radius:16px; padding:2rem; width:min(640px,92vw);
+          max-height:85vh; overflow-y:auto; box-shadow:0 24px 64px rgba(0,0,0,0.6);
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+          <h2 style="margin:0;font-size:1.2rem;">🏷️ Fix Tags</h2>
+          <button class="btn-ghost" onclick="closeFixTagsModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+        </div>
+
+        <div style="margin-bottom:1.25rem;">
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Resource ARN</div>
+          <code id="fix-tags-arn" style="font-size:0.78rem;color:var(--accent);word-break:break-all;"></code>
+        </div>
+
+        <div style="margin-bottom:1.25rem;">
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Region</div>
+          <code id="fix-tags-region" style="font-size:0.85rem;color:#a78bfa;"></code>
+        </div>
+
+        <div style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;">
+          Set a value for each tag that is missing or invalid. Other tags on the resource are not changed.
+        </div>
+
+        <div id="fix-tags-fields" style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;"></div>
+
+        <div id="fix-tags-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin-bottom:1rem;"></div>
+
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button class="btn" onclick="closeFixTagsModal()" style="background:rgba(255,255,255,0.06);">Cancel</button>
+          <button id="fix-tags-submit" class="btn btn-primary" onclick="fixTagsConfirm()">Apply Tags</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <script>
-    const AWS_REGIONS = [
-      { id: 'us-east-1', name: 'N. Virginia' }, { id: 'us-east-2', name: 'Ohio' },
-      { id: 'us-west-1', name: 'N. California' }, { id: 'us-west-2', name: 'Oregon' },
-      { id: 'ap-south-1', name: 'Mumbai' }, { id: 'ap-northeast-3', name: 'Osaka' },
-      { id: 'ap-northeast-2', name: 'Seoul' }, { id: 'ap-southeast-1', name: 'Singapore' },
-      { id: 'ap-southeast-2', name: 'Sydney' }, { id: 'ap-northeast-1', name: 'Tokyo' },
-      { id: 'ca-central-1', name: 'Central' }, { id: 'eu-central-1', name: 'Frankfurt' },
-      { id: 'eu-west-1', name: 'Ireland' }, { id: 'eu-west-2', name: 'London' },
-      { id: 'eu-west-3', name: 'Paris' }, { id: 'eu-north-1', name: 'Stockholm' },
-      { id: 'sa-east-1', name: 'São Paulo' }
-    ];
+    <!-- ─── EXEMPTION MODAL ─────────────────────────────────────────────── -->
+    <div id="exempt-modal" class="modal-backdrop" style="display:none;">
+      <div class="modal-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+          <h2 style="margin:0;font-size:1.2rem;">🛡️ Exempt Resource</h2>
+          <button class="btn-ghost" onclick="closeExemptModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+        </div>
+        <div style="margin-bottom:1.25rem;">
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;">Resource ARN</div>
+          <code id="exempt-arn" style="font-size:0.78rem;color:var(--accent);word-break:break-all;"></code>
+        </div>
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">Reason <span style="color:var(--danger)">*</span></label>
+        <textarea id="exempt-reason" rows="3" maxlength="1000" placeholder="Why is this resource exempt? Link a ticket if possible." style="width:100%;margin-bottom:1rem;"></textarea>
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;">Expires on <span style="color:var(--danger)">*</span></label>
+        <input id="exempt-expiry" type="date" style="width:100%;margin-bottom:1.25rem;">
+        <div id="exempt-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin-bottom:1rem;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button class="btn" onclick="closeExemptModal()" style="background:rgba(255,255,255,0.06);">Cancel</button>
+          <button id="exempt-submit" class="btn btn-primary" onclick="exemptConfirm()">Create Exemption</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── CHANGE PREVIEW MODAL (bulk fix / propagation) ───────────────── -->
+    <div id="change-modal" class="modal-backdrop" style="display:none;">
+      <div class="modal-panel modal-wide">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h2 style="margin:0;font-size:1.2rem;" id="change-title">Bulk fix</h2>
+          <button class="btn-ghost" onclick="closeChangeModal()" style="font-size:1.3rem;padding:4px 10px;">&times;</button>
+        </div>
+        <div id="change-form"></div>
+        <div id="change-status" style="display:none;font-size:0.85rem;padding:10px 14px;border-radius:8px;margin:1rem 0;"></div>
+        <div id="change-preview"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:1rem;">
+          <button class="btn" onclick="closeChangeModal()" style="background:rgba(255,255,255,0.06);">Close</button>
+          <button id="change-preview-btn" class="btn btn-outline">Preview</button>
+          <button id="change-apply-btn" class="btn btn-primary" disabled>Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="chart-tooltip" class="chart-tooltip" role="tooltip" style="display:none;"></div>
+
+  <script src="/static/app.js?v=7"></script>
 
-    const state = {
-      resourceMap: {},
-      lastResults: [],
-      selectedTab: 'read',
-      regions: { read: [], write: [], gov: [], report: [], sync: [] },
-      types: { gov: [] }
-    };
-
-    class RegionPicker {
-      constructor(containerId, tabKey, defaultAll = false) {
-        this.container = document.getElementById(containerId);
-        this.tabKey = tabKey;
-        this.selected = defaultAll ? AWS_REGIONS.map(r => r.id) : ['us-east-2'];
-        this.searchTerm = '';
-        this.render();
-      }
-
-      render() {
-        let html = `
-            <div class="ms-container" id="msc-${this.tabKey}">
-                <div class="ms-header" onclick="document.getElementById('msc-${this.tabKey}').classList.toggle('open')">
-                    <div class="ms-tags">
-                       ${this.selected.length === AWS_REGIONS.length ? `<span class="ms-tag">All Regions</span>` :
-            this.selected.length === 0 ? `<span class="ms-placeholder">Select regions...</span>` :
-              this.selected.slice(0, 3).map(id => {
-                const r = AWS_REGIONS.find(x => x.id === id);
-                return `<span class="ms-tag">${r ? r.name : id}</span>`;
-              }).join('') + (this.selected.length > 3 ? `<span class="ms-tag">+${this.selected.length - 3}</span>` : '')
-          }
-                    </div>
-                    <div class="ms-arrow">▼</div>
-                </div>
-                <div class="ms-dropdown">
-                    <div class="ms-controls" style="flex-direction: column; gap: 10px;">
-                        <input type="text" placeholder="Search regions..." class="region-search-input"
-                               style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 6px 10px; font-size: 0.85rem;"
-                               onclick="event.stopPropagation()"
-                               oninput="regionPickers['${this.tabKey}'].filterList(this.value)">
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
-                            <button class="btn-ghost" style="flex:1; background: rgba(255,255,255,0.05)" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
-                        </div>
-                    </div>
-                    <div class="ms-list">
-                        ${AWS_REGIONS.map(r => `
-                            <div class="ms-opt" data-region-id="${r.id}" data-region-name="${r.name}"
-                                 onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].toggle('${r.id}')">
-                                <input type="checkbox" ${this.selected.includes(r.id) ? 'checked' : ''} style="pointer-events:none">
-                                <div class="ms-opt-text">
-                                    <span class="ms-opt-name">${r.name}</span>
-                                    <span class="ms-opt-id">${r.id}</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-            `;
-        this.container.innerHTML = html;
-        state.regions[this.tabKey] = this.selected.length === AWS_REGIONS.length ? ['all'] : this.selected;
-      }
-
-      filterList(query) {
-        this.searchTerm = query;
-        const q = query.toLowerCase();
-        const items = this.container.querySelectorAll('.ms-opt');
-        let visibleCount = 0;
-        items.forEach(item => {
-          const regionId = item.dataset.regionId.toLowerCase();
-          const regionName = item.dataset.regionName.toLowerCase();
-          const matches = !q || regionId.includes(q) || regionName.includes(q);
-          item.style.display = matches ? '' : 'none';
-          if (matches) visibleCount++;
-        });
-
-        // Show/hide "no results" message
-        let noResults = this.container.querySelector('.ms-no-results');
-        if (visibleCount === 0) {
-          if (!noResults) {
-            noResults = document.createElement('div');
-            noResults.className = 'ms-no-results';
-            noResults.style.cssText = 'padding: 20px; text-align: center; color: var(--muted); font-size: 0.85rem;';
-            noResults.textContent = 'No regions found';
-            this.container.querySelector('.ms-list').appendChild(noResults);
-          }
-          noResults.style.display = '';
-        } else if (noResults) {
-          noResults.style.display = 'none';
-        }
-      }
-
-      toggle(id) {
-        if (this.selected.includes(id)) {
-          this.selected = this.selected.filter(x => x !== id);
-        } else {
-          this.selected.push(id);
-        }
-        this.render();
-        // Re-apply search filter and restore search text after re-render
-        if (this.searchTerm) {
-          const input = this.container.querySelector('.region-search-input');
-          if (input) {
-            input.value = this.searchTerm;
-            this.filterList(this.searchTerm);
-          }
-        }
-        document.getElementById(`msc-${this.tabKey}`).classList.add('open');
-      }
-
-      selectAll(isAll) {
-        this.selected = isAll ? AWS_REGIONS.map(r => r.id) : [];
-        this.render();
-        if (this.searchTerm) {
-          const input = this.container.querySelector('.region-search-input');
-          if (input) {
-            input.value = this.searchTerm;
-            this.filterList(this.searchTerm);
-          }
-        }
-        document.getElementById(`msc-${this.tabKey}`).classList.add('open');
-      }
-    }
-
-    const regionPickers = {};
-
-    document.addEventListener('click', (e) => {
-      ['read', 'write', 'gov', 'report', 'sync'].forEach(tab => {
-        const msc = document.getElementById(`msc-${tab}`);
-        if (msc && !msc.contains(e.target)) { msc.classList.remove('open'); }
-      });
-    });
-
-    const $ = (s) => document.querySelector(s);
-    const $$ = (s) => document.querySelectorAll(s);
-
-    // Initial Load
-    async function loadMeta() {
-      try {
-        const r = await fetch("/api/meta/resource-types");
-        const data = await r.json();
-        state.resourceMap = data.map || {};
-        renderTypeList();
-        renderGovTypeList();
-        regionPickers['read'] = new RegionPicker('read-region-picker', 'read', false);
-        regionPickers['write'] = new RegionPicker('write-region-picker', 'write', false);
-        regionPickers['gov'] = new RegionPicker('gov-region-picker', 'gov', true);
-        regionPickers['report'] = new RegionPicker('report-region-picker', 'report', true);
-        regionPickers['sync'] = new RegionPicker('sync-region-picker', 'sync', false);
-      } catch (e) {
-        console.error("Critical Metadata Failure", e);
-      }
-    }
-
-    function renderTypeList(filter = '') {
-      const list = $('#type-list');
-      list.innerHTML = '';
-      const query = filter.toLowerCase();
-
-      Object.entries(state.resourceMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .forEach(([friendly, raw]) => {
-          if (query && !friendly.toLowerCase().includes(query) && !raw.toLowerCase().includes(query)) return;
-
-          const div = document.createElement('div');
-          div.className = 'type-item';
-          div.innerHTML = `
-            <input type="checkbox" value="${friendly}">
-            <div class="label-group">
-              <span class="friendly">${friendly}</span>
-              <span class="aws-raw">${raw}</span>
-            </div>
-          `;
-          div.onclick = (e) => {
-            if (e.target.tagName !== 'INPUT') {
-              const cb = div.querySelector('input');
-              cb.checked = !cb.checked;
-            }
-          };
-          list.appendChild(div);
-        });
-    }
-
-    function renderGovTypeList(filter = '') {
-      const list = $('#gov-type-list');
-      if (!list) return;
-      list.innerHTML = '';
-      const query = filter.toLowerCase();
-
-      Object.entries(state.resourceMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .forEach(([friendly, raw]) => {
-          if (query && !friendly.toLowerCase().includes(query) && !raw.toLowerCase().includes(query)) return;
-
-          const div = document.createElement('div');
-          div.className = 'type-item';
-          div.innerHTML = `
-            <input type="checkbox" data-id="${raw}" ${state.types.gov.includes(raw) ? 'checked' : ''}>
-            <div class="label-group">
-              <span class="friendly">${friendly}</span>
-              <span class="aws-raw">${raw}</span>
-            </div>
-          `;
-          div.onclick = (e) => {
-            if (e.target.tagName !== 'INPUT') {
-              const cb = div.querySelector('input');
-              cb.checked = !cb.checked;
-              cb.dispatchEvent(new Event('change'));
-            }
-          };
-          div.querySelector('input').onchange = (e) => {
-            if (e.target.checked) {
-              if (!state.types.gov.includes(raw)) state.types.gov.push(raw);
-            } else {
-              state.types.gov = state.types.gov.filter(x => x !== raw);
-            }
-          };
-          list.appendChild(div);
-        });
-    }
-
-    $('#type-search').oninput = (e) => renderTypeList(e.target.value);
-    $('#gov-type-search').oninput = (e) => renderGovTypeList(e.target.value);
-    $('#types-all').onclick = () => $$('#type-list input').forEach(i => i.checked = true);
-    $('#types-clear').onclick = () => $$('#type-list input').forEach(i => i.checked = false);
-
-    function addTagRow(containerId) {
-      const row = document.createElement('div');
-      row.className = 'tag-row';
-      row.innerHTML = `<input type="text" placeholder="Key" class="tag-key"><input type="text" placeholder="Value" class="tag-val"><button class="rm">✕</button>`;
-      row.querySelector('.rm').onclick = () => row.remove();
-      $(`#${containerId}`).appendChild(row);
-    }
-
-    $('#add-read-filter').onclick = () => addTagRow('read-filters');
-    $('#add-write-tag').onclick = () => addTagRow('write-tags');
-
-    // Tab Switching
-    $$('.tab-btn').forEach(btn => {
-      btn.onclick = () => {
-        const tab = btn.dataset.tab;
-        state.selectedTab = tab;
-        $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
-        $$('.config-panel').forEach(p => p.style.display = p.id === `config-${tab}` ? 'block' : 'none');
-      };
-    });
-
-    $('#read-missing-tag-enable').onchange = (e) => {
-      $('#missing-tag-group').style.display = e.target.checked ? 'block' : 'none';
-    };
-
-    $('#btn-read').onclick = async () => {
-      const btn = $('#btn-read');
-      const types = Array.from($$('#type-list input:checked')).map(i => i.value);
-      if (!types.length) return alert("Please select at least one AWS Service.");
-
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Initializing Scan...';
-
-      const filters = {};
-      $$('#read-filters .tag-row').forEach(row => {
-        const k = row.querySelector('.tag-key').value.trim();
-        const v = row.querySelector('.tag-val').value.trim();
-        if (k && v) filters[k] = v;
-      });
-
-      const payload = {
-        resources: types,
-        filters: filters,
-        regions: state.regions['read']
-      };
-
-      if ($('#read-missing-tag-enable').checked) {
-        payload.missing_tag = $('#read-missing-tag-key').value;
-      }
-
-      try {
-        const res = await fetch("/api/read", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        renderResults(data);
-      } catch (e) {
-        alert("Discovery failed: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Run Discovery Scan';
-      }
-    };
-
-    function renderResults(data) {
-      const container = $('#result-content');
-      const actionHeader = $('#result-actions');
-      const output = $('#output');
-
-      output.textContent = JSON.stringify(data, null, 2);
-      $('#toggle-json').style.display = 'block';
-
-      const resources = data.resources || [];
-      state.lastResults = resources;
-      document.getElementById('stat-discovered').textContent = resources.length;
-      document.getElementById('stats-bar').style.display = 'flex';
-
-      if (!resources.length) {
-        actionHeader.style.display = 'none';
-        container.innerHTML = `<div class="empty-state"><p>Zero resources found matching your specified filters.</p></div>`;
-        return;
-      }
-
-      actionHeader.style.display = 'block';
-      let html = `<div class="table-container"><table><thead><tr><th style="width: 40px"><input type="checkbox" id="select-all-results"></th><th>Resource Name</th><th>Region</th><th>ARN</th><th>Tags</th></tr></thead><tbody>`;
-
-      resources.forEach((r, idx) => {
-        const arnParts = (r.ResourceARN || '').split(':');
-        const region = arnParts[3] || 'global';
-        const tags = Object.entries(r.Tags || {}).map(([k, v]) => `<span class="status-badge info">${k}: ${v}</span>`).join('');
-        html += `<tr><td><input type="checkbox" class="result-check" data-idx="${idx}"></td><td class="name-cell">${r.Name || '---'}</td><td><span class="status-badge" style="background: rgba(255,255,255,0.05)">${region}</span></td><td class="arn-cell">${r.ResourceARN} <span class="help-icon" style="cursor:pointer; background:none" onclick="navigator.clipboard.writeText('${r.ResourceARN}'); toast('ARN Copied', 'success')">📋</span></td><td>${tags}</td></tr>`;
-      });
-
-      html += `</tbody></table></div>`;
-      container.innerHTML = html;
-
-      $('#select-all-results').onclick = (e) => {
-        $$('.result-check').forEach(c => c.checked = e.target.checked);
-      };
-    }
-
-    $('#btn-transfer').onclick = () => {
-      const selected = Array.from($$('.result-check:checked'))
-        .map(c => state.lastResults[c.dataset.idx].ResourceARN);
-
-      if (!selected.length) return alert("Select at least one resource from the table.");
-
-      $('#write-arns').value = selected.join('\n');
-
-      Array.from($$('.tab-btn')).find(b => b.dataset.tab === 'write').click();
-      $('#write-arns').focus();
-    };
-
-    $('#btn-write').onclick = async () => {
-      const btn = $('#btn-write');
-      const arns = $('#write-arns').value.split('\n').filter(s => s.trim());
-      if (!arns.length) return alert("Resource Inventory is empty.");
-
-      const tags = {};
-      $$('#write-tags .tag-row').forEach(row => {
-        const k = row.querySelector('.tag-key').value.trim();
-        const v = row.querySelector('.tag-val').value.trim();
-        if (k && v) tags[k] = v;
-      });
-
-      if (!Object.keys(tags).length) return alert("Please define at least one tag metadata key-pair.");
-
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Executing Write Operations...';
-
-      const payload = {
-        arns: arns,
-        tags: tags,
-        regions: state.regions['write']
-      };
-
-      try {
-        const res = await fetch("/api/write", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        renderWriteResults(data);
-      } catch (e) {
-        alert("Batch tagging failed: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Commit Batch Changes';
-      }
-    };
-
-    function renderWriteResults(data) {
-      const container = $('#result-content');
-      const output = $('#output');
-      output.textContent = JSON.stringify(data, null, 2);
-
-      const failed = data.failed_resources || {};
-      const successArns = (data.arns || []).filter(a => !failed[a]);
-      const failedArns = Object.keys(failed);
-
-      let html = `<div class="section-title">Batch Execution Summary</div>`;
-
-      if (successArns.length) {
-        html += `<div class="card" style="border-color: var(--success); margin-bottom:1.5rem;"><div style="color:var(--success); font-weight:700">✓ Successful Operations (${successArns.length})</div><div style="font-size:0.75rem; margin-top:10px; color:var(--muted); line-height:1.4">${successArns.join('<br>')}</div></div>`;
-      }
-
-      if (failedArns.length) {
-        html += `<div class="card" style="border-color: var(--danger);"><div style="color:var(--danger); font-weight:700">⚠ Partial Failures (${failedArns.length})</div><table style="margin-top:12px; font-size:0.8rem;">${failedArns.map(a => `<tr><td class="arn-cell">${a}</td><td style="color:var(--danger)">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td></tr>`).join('')}</table></div>`;
-      }
-
-      document.getElementById('stat-tagged').textContent = (data.count || 0);
-      document.getElementById('stats-bar').style.display = 'flex';
-      const writeMsg = failedArns.length ? `Tagged ${data.count || 0} resources (${failedArns.length} failed)` : `Successfully tagged ${data.count || 0} resources`;
-      toast(writeMsg, failedArns.length ? 'error' : 'success');
-      container.innerHTML = html;
-    }
-
-    $('#toggle-json').onclick = () => {
-      const container = $('#json-output-container');
-      const isVisible = container.style.display === 'block';
-      container.style.display = isVisible ? 'none' : 'block';
-      $('#toggle-json').textContent = isVisible ? 'Show JSON Debug' : 'Hide JSON Debug';
-    };
-
-    $('#btn-gov').onclick = async () => {
-      const btn = $('#btn-gov');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Identifying Owners...';
-      const payload = {
-        action: 'scan',
-        regions: state.regions['gov'],
-        types: state.types.gov
-      };
-
-      try {
-        const res = await fetch("/api/gov", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        renderGovResults(data);
-      } catch (e) {
-        alert("Governance scan failed: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Run Auto-Tagging Scan';
-      }
-    };
-
-    function renderGovResults(data) {
-      const container = $('#result-content');
-      const output = $('#output');
-      output.textContent = JSON.stringify(data, null, 2);
-
-      const regionData = data.regions || {};
-      let html = `<div class="section-title">Reconciliation Summary: ${data.total_tagged || 0} Resources Tagged</div>`;
-
-      Object.entries(regionData).forEach(([reg, res]) => {
-        const tagged = res.tagged || [];
-        const failed = res.failed || {};
-        const failedArns = Object.keys(failed);
-
-        html += `<div style="margin-bottom: 24px;">
-          <h4 style="margin: 0 0 10px 0; color: #c4b5fd; font-size: 0.95rem;">Region: ${reg}</h4>`;
-
-        if (tagged.length) {
-          html += `<div class="card" style="border-color: rgba(16, 185, 129, 0.4); margin-bottom:1rem; padding: 1rem; background: rgba(16, 185, 129, 0.05);">
-            <div style="color:var(--success); font-weight:700; margin-bottom: 8px;">✓ Automatically Tagged (${tagged.length})</div>
-            <div style="font-family: var(--mono); font-size:0.75rem; color: #cbd5e1; line-height:1.6; word-break: break-all;">
-              ${tagged.join('<br>')}
-            </div>
-          </div>`;
-        }
-
-        if (failedArns.length) {
-          html += `<div class="card" style="border-color: rgba(239, 68, 68, 0.4); padding: 1rem; background: rgba(239, 68, 68, 0.05);">
-            <div style="color:var(--danger); font-weight:700; margin-bottom: 8px;">⚠ Tagging Failed (${failedArns.length})</div>
-            <table style="width: 100%; border: none; background: transparent;">
-              ${failedArns.map(a => `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <td style="padding: 8px 0; font-family: var(--mono); font-size: 0.75rem; color: #cbd5e1; word-break: break-all; border: none;">${a}</td>
-                  <td style="padding: 8px 0 8px 12px; font-size: 0.8rem; color: var(--danger); border: none;">${failed[a].ErrorMessage || 'Access Denied / Not Found'}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </div>`;
-        }
-
-        if (!tagged.length && !failedArns.length) {
-          html += `<div style="font-size: 0.85rem; color: var(--muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">No untagged resources found or identified.</div>`;
-        }
-        html += `</div>`;
-      });
-
-      container.innerHTML = html;
-    }
-
-    // Toast notifications
-    function toast(msg, type = 'info') {
-      const tc = document.getElementById('toast-container');
-      const el = document.createElement('div');
-      el.className = `toast toast-${type}`;
-      const icons = { success: '✓', error: '✕', info: 'ℹ' };
-      el.innerHTML = `<span style="font-size:1.1rem">${icons[type] || 'ℹ'}</span><span>${msg}</span>`;
-      tc.appendChild(el);
-      setTimeout(() => el.remove(), 4000);
-    }
-
-
-
-
-    document.getElementById('btn-report').onclick = async () => {
-      const btn = document.getElementById('btn-report');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Auditing…';
-      const payload = {
-        regions: state.regions['report'] || [],
-        mandatory_tags: document.getElementById('report-mandatory').value.split(',').map(s => s.trim()).filter(s => s),
-        export_bucket: document.getElementById('report-bucket').value.trim() || null
-      };
-      try {
-        const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const data = await res.json();
-        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
-        document.getElementById('toggle-json').style.display = 'block';
-        renderReportResults(data);
-      } catch (e) { toast('Report generation failed: ' + e.message, 'error'); }
-      finally { btn.disabled = false; btn.innerHTML = 'Generate Compliance Report'; }
-    };
-
-    function renderReportResults(data) {
-      const summary = data.summary || {};
-      const score = summary.compliance_score !== undefined ? summary.compliance_score : 0;
-      document.getElementById('stat-score').textContent = score + '%';
-      document.getElementById('stats-bar').style.display = 'flex';
-      const col = score > 80 ? '#34d399' : score > 50 ? '#fbbf24' : '#f87171';
-      const circ = 2 * Math.PI * 44;
-      const dash = (score / 100) * circ;
-      let html = `
-        <div class="score-ring">
-          <div class="ring-wrap">
-            <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/><circle cx="50" cy="50" r="44" fill="none" stroke="${col}" stroke-width="8" stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/></svg>
-            <div class="ring-label"><span class="ring-pct" style="color:${col}">${score}%</span><span class="ring-sub">Compliant</span></div>
-          </div>
-          <div class="score-meta">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start">
-              <h3 style="color:${col}; margin:0">Compliance Scorecard</h3>
-              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:8px 16px; font-size:0.8rem; background:linear-gradient(135deg,#a78bfa,#8b5cf6)">Transfer to Batch Fix</button>
-            </div>
-            <p>${summary.compliant || 0} of ${summary.total_resources || 0} resources fully tagged<br>
-               <span style="color:var(--danger)">${summary.non_compliant || 0} resources</span> need attention</p>
-          </div>
-        </div>`;
-      Object.entries(data.regions || {}).forEach(([reg, res]) => {
-        const regScore = res.compliance_score !== undefined ? res.compliance_score : 0;
-        const rc = regScore > 80 ? 'var(--success)' : regScore > 50 ? 'var(--warning)' : 'var(--danger)';
-        const nonCompliant = (res.resources || []).filter(r => !r.IsCompliant);
-        html += `<div class="region-section">
-          <div class="region-section-title">
-            <h4>${reg}</h4>
-            <div style="display:flex;gap:8px;align-items:center">
-              <span style="font-size:0.8rem;color:${rc};font-weight:700">${regScore}%</span>
-              <span class="region-badge">${nonCompliant.length} issues</span>
-            </div>
-          </div>`;
-        if (nonCompliant.length) {
-          html += `<div class="table-container"><table><thead><tr><th style="width:40px"><input type="checkbox" class="report-select-all"></th><th>Resource ARN</th><th>Missing Tags</th></tr></thead><tbody>`;
-          nonCompliant.forEach(r => {
-            html += `<tr><td><input type="checkbox" class="report-res-check" data-arn="${r.ResourceARN}"></td><td class="arn-cell">${r.ResourceARN}</td><td>${r.MissingTags.map(t => `<span class="status-badge err">${t}</span>`).join('')}</td></tr>`;
-          });
-          html += `</tbody></table></div>`;
-        } else {
-          html += `<div style="padding:10px;font-size:0.85rem;color:var(--success)">✓ All resources compliant in this region</div>`;
-        }
-        html += `</div>`;
-      });
-      if (data.export_location) html += `<div class="stat-card" style="margin-top:1rem;text-align:center"><div class="stat-label">Report Exported To</div><code style="color:var(--accent);font-size:0.8rem">${data.export_location}</code></div>`;
-      document.getElementById('result-content').innerHTML = html;
-    }
-
-    document.getElementById('btn-sync').onclick = async () => {
-      const btn = document.getElementById('btn-sync');
-      const vpcId = document.getElementById('sync-vpc-id').value.trim();
-      if (!vpcId) return toast('VPC ID is required.', 'error');
-      const reg = (state.regions['sync'] || [])[0] || 'us-east-2';
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div> Propagating Tags…';
-      try {
-        const res = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync_vpc', vpc_id: vpcId, region: reg }) });
-        const data = await res.json();
-        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
-        document.getElementById('toggle-json').style.display = 'block';
-        renderSyncResults(data, vpcId);
-      } catch (e) { toast('Sync failed: ' + e.message, 'error'); }
-      finally { btn.disabled = false; btn.innerHTML = 'Propagate VPC Tags'; }
-    };
-
-    function renderSyncResults(data, vpcId) {
-      const updated = data.updated_resources || [];
-      let html = `<div class="section-title" style="margin-bottom:1.5rem">VPC Tag Propagation — <code style="font-size:0.85rem;color:#a78bfa">${vpcId}</code></div>`;
-      if (data.error) {
-        html += `<div style="padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;color:var(--danger)">Error: ${data.error}</div>`;
-      } else {
-        html += `<div class="score-ring" style="margin-bottom:1.5rem">
-          <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(217,70,239,0.2));border:2px solid rgba(139,92,246,0.4);display:flex;align-items:center;justify-content:center;flex-direction:column">
-            <span style="font-size:1.5rem;font-weight:700;color:#e879f9">${updated.length}</span>
-          </div>
-          <div class="score-meta"><h3 style="color:#e879f9">Resources Updated</h3><p>Tags propagated from <b>${vpcId}</b> to all child network resources.</p></div>
-        </div>`;
-        if (updated.length) {
-          html += `<div class="sync-resource-list">${updated.map(a => `• ${a}`).join('<br>')}</div>`;
-        } else {
-          html += `<div style="color:var(--muted);font-size:0.85rem;padding:1rem">No child resources were found or updated.</div>`;
-        }
-        if (data.errors && data.errors.length) {
-          html += `<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:#fca5a5">${data.errors.join('<br>')}</div></div>`;
-        }
-      }
-      document.getElementById('result-content').innerHTML = html;
-      toast(data.error ? 'Sync failed.' : `Propagated tags to ${updated.length} resources.`, data.error ? 'error' : 'success');
-    }
-
-    // Replace alerts with toasts
-    const _origAlert = window.alert;
-    window.alert = (msg) => {
-      const type = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') ? 'error' : 'info';
-      toast(msg, type);
-    };
-
-    // Update stat bar on results
-    const _origRenderResults = window.renderResults || null;
-
-    addTagRow('read-filters');
-    addTagRow('write-tags');
-
-    function transferReportToBatch() {
-      const selected = Array.from(document.querySelectorAll('.report-res-check:checked')).map(cb => cb.dataset.arn);
-      if (!selected.length) return toast('Please select at least one resource to fix.', 'warning');
-
-      const textarea = document.getElementById('write-arns');
-      const currentVal = textarea.value.trim();
-      const newVal = (currentVal ? currentVal + '\n' : '') + selected.join('\n');
-
-      // Remove duplicates
-      const uniqueArns = [...new Set(newVal.split('\n'))].filter(s => s.trim());
-      textarea.value = uniqueArns.join('\n');
-
-      // Switch to Write tab
-      document.querySelector('[data-tab="write"]').click();
-      toast(`Transferred ${selected.length} resources to Batch Tagging`, 'success');
-
-      // Auto-focus the tag key field
-      setTimeout(() => {
-        const rows = document.querySelectorAll('#write-tags .tag-key');
-        if (rows.length) rows[0].focus();
-        else {
-          addTagRow('write-tags');
-          setTimeout(() => document.querySelector('#write-tags .tag-key').focus(), 50);
-        }
-      }, 100);
-    }
-
-    // Handle Select All in Report
-    document.addEventListener('change', (e) => {
-      if (e.target.classList.contains('report-select-all')) {
-        const table = e.target.closest('table');
-        const cbs = table.querySelectorAll('.report-res-check');
-        cbs.forEach(cb => cb.checked = e.target.checked);
-      }
-    });
-
-    loadMeta();
-
-    // Table Filtering
-    document.getElementById('table-filter').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase();
-      const rows = document.querySelectorAll('#result-content tbody tr');
-      rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.classList.toggle('filtered', !text.includes(q));
-      });
-    });
-
-    // CSV Export
-    document.getElementById('btn-export-csv').onclick = () => {
-      const rows = document.querySelectorAll('#result-content table tr');
-      let csv = [];
-      rows.forEach(row => {
-        const cols = row.querySelectorAll('td, th');
-        let rowData = [];
-        cols.forEach((col, idx) => {
-          if (idx === 0) return; // skip checkbox
-          let text = col.innerText.replace(/\n/g, ' ').replace(/"/g, '""');
-          rowData.push('"' + text + '"');
-        });
-        if (rowData.length) csv.push(rowData.join(','));
-      });
-
-      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.setAttribute('hidden', '');
-      a.setAttribute('href', url);
-      a.setAttribute('download', `aws-resources-${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      toast('CSV exported successfully', 'success');
-    };
-
-    // Auto-populate Region Pickers on load if meta fails or before it loads
-    window.addEventListener('DOMContentLoaded', () => {
-      if (!regionPickers['read']) {
-        // Fallback if loadMeta hasn't run
-        console.log("Waiting for metadata...");
-      }
-    });
-  </script>
 </body>
 
 </html>

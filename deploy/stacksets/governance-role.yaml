@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role for Cross-Account Tag Governance (scan, propagation checks, tag fixes)'
+
+Parameters:
+  ManagementAccountId:
+    Type: String
+    Description: The AWS Account ID of the central governance account (where aws-tagging-utils runs).
+  ExternalId:
+    Type: String
+    Default: ''
+    Description: Optional ExternalId the governance account must pass (set MULTI_ACCOUNT_EXTERNAL_ID to the same value).
+  AllowTagWrites:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: 'false = read-only role (compliance scans, propagation checks, no fixes).'
+
+Conditions:
+  HasExternalId: !Not [!Equals [!Ref ExternalId, '']]
+  WritesAllowed: !Equals [!Ref AllowTagWrites, 'true']
+
+Resources:
+  TagGovernanceExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWSOrganizationTagGovernanceRole
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${ManagementAccountId}:root'
+            Action: sts:AssumeRole
+            Condition: !If
+              - HasExternalId
+              - StringEquals:
+                  sts:ExternalId: !Ref ExternalId
+              - !Ref AWS::NoValue
+      Policies:
+        - PolicyName: TagGovernanceRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Inventory
+                Effect: Allow
+                Action:
+                  - tag:GetResources
+                  - tag:GetTagKeys
+                  - tag:GetTagValues
+                  - resource-explorer-2:ListResources
+                  - resource-explorer-2:Search
+                  - resource-explorer-2:GetView
+                  - resource-explorer-2:GetIndex
+                  - ec2:DescribeRegions
+                Resource: '*'
+              - Sid: PropagationChecks
+                Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeNetworkAcls
+                  - ec2:DescribeInternetGateways
+                  - ec2:DescribeNatGateways
+                  - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeInstances
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeNetworkInterfaces
+                  - autoscaling:DescribeAutoScalingGroups
+                  - ecs:ListClusters
+                  - ecs:ListServices
+                  - ecs:DescribeServices
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                  - cloudformation:DescribeStacks
+                  - rds:DescribeDBClusters
+                  - rds:DescribeDBInstances
+                  - eks:ListClusters
+                  - eks:DescribeCluster
+                  - eks:ListNodegroups
+                  - eks:DescribeNodegroup
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeTags
+                  - cloudtrail:LookupEvents
+                Resource: '*'
+        - !If
+          - WritesAllowed
+          - PolicyName: TagGovernanceWrite
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # The tagging API calls each service's own tagging action on your behalf
+                - Sid: TagResources
+                  Effect: Allow
+                  Action:
+                    - tag:TagResources
+                    - tag:UntagResources
+                    - ec2:CreateTags
+                    - ec2:DeleteTags
+                    - s3:GetBucketTagging
+                    - s3:PutBucketTagging
+                    - rds:AddTagsToResource
+                    - rds:RemoveTagsFromResource
+                    - lambda:TagResource
+                    - lambda:UntagResource
+                    - logs:TagResource
+                    - logs:UntagResource
+                    - logs:TagLogGroup
+                    - logs:UntagLogGroup
+                    - sqs:TagQueue
+                    - sqs:UntagQueue
+                    - sns:TagResource
+                    - sns:UntagResource
+                    - dynamodb:TagResource
+                    - dynamodb:UntagResource
+                    - ecs:TagResource
+                    - ecs:UntagResource
+                    - ecr:TagResource
+                    - ecr:UntagResource
+                    - eks:TagResource
+                    - eks:UntagResource
+                    - elasticloadbalancing:AddTags
+                    - elasticloadbalancing:RemoveTags
+                    - elasticache:AddTagsToResource
+                    - elasticache:RemoveTagsFromResource
+                    - es:AddTags
+                    - es:RemoveTags
+                    - kms:TagResource
+                    - kms:UntagResource
+                    - kinesis:AddTagsToStream
+                    - kinesis:RemoveTagsFromStream
+                    - redshift:CreateTags
+                    - redshift:DeleteTags
+                    - states:TagResource
+                    - states:UntagResource
+                    - cloudformation:TagResource
+                    - cloudformation:UntagResource
+                    - apigateway:PUT
+                    - apigateway:POST
+                    - apigateway:DELETE
+                    - glue:TagResource
+                    - glue:UntagResource
+                    - athena:TagResource
+                    - athena:UntagResource
+                    - sagemaker:AddTags
+                    - sagemaker:DeleteTags
+                    - elasticmapreduce:AddTags
+                    - elasticmapreduce:RemoveTags
+                    - events:TagResource
+                    - events:UntagResource
+                  Resource: '*'
+                # Propagation config fixes (undoable from the Changes tab)
+                - Sid: PropagationConfig
+                  Effect: Allow
+                  Action:
+                    - autoscaling:CreateOrUpdateTags
+                    - ecs:UpdateService
+                  Resource: '*'
+          - !Ref AWS::NoValue
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt TagGovernanceExecutionRole.Arn

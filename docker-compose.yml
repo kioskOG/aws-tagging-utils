@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-tagging-utils:latest
+    container_name: aws-tagging-utils-web
+    ports:
+      - "5050:5050"
+    env_file:
+      - .env
+    environment:
+      # ── AWS Region (overrides .env if set) ──────────────────────
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
+      # ── SQLite persistence path (inside the named volume) ───────
+      - SQLITE_DB_PATH=/app/data/app.db
+      # ── Auth mode: local_dev bypasses ALB OIDC ──────────────────
+      # Set AUTH_MODE=alb_oidc in .env when behind a real ALB
+      - AUTH_MODE=${AUTH_MODE:-local_dev}
+      # ── Dev identity used when AUTH_MODE=local_dev ───────────────
+      # Format: username:Role1,Role2  (Roles: admin, viewer, finops)
+      - DEV_AUTH_USER=${DEV_AUTH_USER:-admin:admin}
+    volumes:
+      # Named volume so SQLite data survives container restarts
+      - sqlite_data:/app/data
+      # Mount ~/.aws/credentials read-only so the container uses your
+      # host AWS identity (EC2 instance profile is preferred instead)
+      - ${HOME}/.aws:/home/appuser/.aws:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-tagging-utils:latest
+    container_name: aws-tagging-utils-mcp
+    command: ["python", "mcp_server.py"]
+    env_file:
+      - .env
+    environment:
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
+      - SQLITE_DB_PATH=/app/data/app.db
+    volumes:
+      - sqlite_data:/app/data
+      - ${HOME}/.aws:/home/appuser/.aws:ro
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  sqlite_data:
+    driver: local

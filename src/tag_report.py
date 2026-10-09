@@ -1,61 +1,37 @@
 import json
+import time
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
 from botocore.exceptions import BotoCoreError, ClientError
+import boto3
 
-# Try to import from tag_read to reuse RESOURCE_TYPE_MAP
-try:
-    from tag_read import RESOURCE_TYPE_MAP
-except ImportError:
-    try:
-        from src.tag_read import RESOURCE_TYPE_MAP
-    except ImportError:
-        # Fallback if module is completely undiscoverable
-        RESOURCE_TYPE_MAP = {
-            "Elasticache": "elasticache:cluster",
-            "RDS": "rds:db",
-            "RDSCluster": "rds:cluster",
-            "DynamoDB": "dynamodb:table",
-            "Elasticsearch": "es",
-            "ELB": "elasticloadbalancing:loadbalancer",
-            "S3": "s3:bucket",
-            "EC2Instance": "ec2:instance",
-            "EBSVolume": "ec2:volume",
-            "EBSSnapshot": "ec2:snapshot",
-            "VPC": "ec2:vpc",
-            "Subnet": "ec2:subnet",
-            "SecurityGroup": "ec2:security-group",
-            "InternetGateway": "ec2:internet-gateway",
-            "NatGateway": "ec2:natgateway",
-            "RouteTable": "ec2:route-table",
-            "NetworkInterface": "ec2:network-interface",
-            "Lambda": "lambda:function",
-            "ECSCluster": "ecs:cluster",
-            "ECSService": "ecs:service",
-            "ECR": "ecr:repository",
-            "EKS": "eks:cluster",
-            "SNS": "sns:topic",
-            "SQS": "sqs:queue",
-            "Redshift": "redshift:cluster",
-            "KinesisStream": "kinesis:stream",
-            "KMS": "kms:key",
-            "LogGroup": "logs:log-group",
-            "ApiGateway": "apigateway:restapis",
-            "Athena": "athena:workgroup",
-            "Glue": "glue:job",
-            "EMR": "elasticmapreduce:cluster",
-            "StepFunction": "states:stateMachine",
-            "CloudFormation": "cloudformation:stack",
-            "EventBridge": "events:rule",
-            "SageMaker": "sagemaker:notebook-instance",
-        }
-
+from src.tag_read import RESOURCE_TYPE_MAP
 from src.clients import get_ec2_client, get_s3_client, get_tagging_client
-from src.config import DEFAULT_REGION, MANDATORY_TAGS, REPORT_BUCKET
+from src.config import (
+    DEFAULT_REGION, 
+    MANDATORY_TAGS, 
+    REPORT_BUCKET,
+    GOVERNANCE_SCHEMA_PATH,
+    GOVERNANCE_UNKNOWN_TAGS,
+    GOVERNANCE_NORMALIZATION
+)
 from src.logging_config import get_logger
+from src.governance.engine import TagGovernanceEngine
+from src.governance.schema_provider import FileSchemaProvider
+from src.multi_account import CrossAccountManager
+from src.observability.metrics import record_compliance_report, record_scan_outcome
 
 logger = get_logger(__name__)
+
+
+# Initialize Governance Engine
+schema_provider = FileSchemaProvider(GOVERNANCE_SCHEMA_PATH)
+governance_engine = TagGovernanceEngine(
+    schema_provider=schema_provider,
+    unknown_tags_behavior=GOVERNANCE_UNKNOWN_TAGS,
+    enable_normalization=GOVERNANCE_NORMALIZATION
+)
 
 def get_client(region: str):
     return get_tagging_client(region)
@@ -77,8 +53,30 @@ def get_all_regions():
     except Exception:
         return [DEFAULT_REGION]
 
-def generate_report(target_regions: List[str], mandatory_tags: List[str], resource_types: List[str] = None) -> Dict[str, Any]:
-    report = {
+def collect_inventory(region: str, account_id: Optional[str], type_filters: Optional[List[str]]) -> Dict[str, Any]:
+    """Indirection so tests can stub the inventory without AWS."""
+    from src.inventory import collect
+    return collect(region, account_id, type_filters)
+
+
+def generate_report(target_regions: List[str], mandatory_tags: List[str], resource_types: List[str] = None,
+                    accounts: Optional[List[Optional[str]]] = None) -> Dict[str, Any]:
+    """
+    Inventory every account × region and evaluate each resource against the tag schema
+    plus `mandatory_tags`.
+
+    Without `resource_types`, the scan reads every resource type and evaluates those in
+    RESOURCE_TYPE_MAP (COMPLIANCE_SCOPE=mapped) or all of them (COMPLIANCE_SCOPE=all);
+    types outside the map are counted in report["coverage"]["unmapped_types"].
+    """
+    from src.arn_utils import account_of, type_matches
+    from src.aws_session import target_accounts
+    from src.config import COMPLIANCE_SCOPE, INVENTORY_SOURCE
+
+    started = time.perf_counter()
+    accounts = accounts if accounts is not None else target_accounts()
+    mapped_types = list(RESOURCE_TYPE_MAP.values())
+    report: Dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "mandatory_tags": mandatory_tags,
         "resource_filter": resource_types,
@@ -88,65 +86,116 @@ def generate_report(target_regions: List[str], mandatory_tags: List[str], resour
             "non_compliant": 0,
             "compliance_score": 0.0
         },
-        "regions": {}
+        "regions": {},
+        "accounts": {},
     }
+    coverage: Dict[str, Any] = {
+        "inventory_source": INVENTORY_SOURCE,
+        "scope": "filtered" if resource_types else COMPLIANCE_SCOPE,
+        "never_tagged": 0,
+        "unmapped_types": {},
+        "warnings": [],
+    }
+    region_errors: Dict[str, List[str]] = {}
 
-    scan_types = resource_types if resource_types else list(RESOURCE_TYPE_MAP.values())
-    
-    for region in target_regions:
-        logger.info("Auditing region: %s", region)
-        region_report = {
-            "total": 0,
-            "compliant": 0,
-            "non_compliant": 0,
-            "resources": []
-        }
-        
-        try:
-            client = get_client(region)
-            paginator = client.get_paginator("get_resources")
-            page_iterator = paginator.paginate(ResourceTypeFilters=scan_types)
+    for account in accounts:
+        acct_label = account or "default"
+        for region in target_regions:
+            logger.info("Auditing account=%s region=%s", acct_label, region)
+            bucket = report["regions"].setdefault(
+                region, {"total": 0, "compliant": 0, "non_compliant": 0, "resources": []})
+            try:
+                inv = collect_inventory(region, account, resource_types or None)
+            except Exception as e:
+                logger.error("Failed to audit account=%s region=%s: %s", acct_label, region, e)
+                region_errors.setdefault(region, []).append(f"{acct_label}: {e}")
+                report["accounts"].setdefault(acct_label, {"total": 0, "compliant": 0, "errors": {}})["errors"][region] = str(e)
+                continue
+            if inv.get("warning"):
+                coverage["warnings"].append(inv["warning"])
+            if inv.get("source") == "resource_explorer":
+                coverage["inventory_source"] = "resource_explorer"
 
-            
-            for page in page_iterator:
-                for item in page.get("ResourceTagMappingList", []):
-                    arn = item.get("ResourceARN", "")
-                    tags = {t["Key"]: t["Value"] for t in item.get("Tags", [])}
-                    
-                    missing = [t for t in mandatory_tags if t not in tags or not str(tags[t]).strip()]
-                    is_compliant = len(missing) == 0
-                    
-                    res_info = {
-                        "ResourceARN": arn,
-                        "IsCompliant": is_compliant,
-                        "MissingTags": missing,
-                        "Tags": tags
-                    }
-                    
-                    region_report["resources"].append(res_info)
-                    region_report["total"] += 1
-                    if is_compliant:
-                        region_report["compliant"] += 1
-                    else:
-                        region_report["non_compliant"] += 1
-                        
-            report["summary"]["total_resources"] += region_report["total"]
-            report["summary"]["compliant"] += region_report["compliant"]
-            report["summary"]["non_compliant"] += region_report["non_compliant"]
-            report["regions"][region] = region_report
-            if region_report["total"] > 0:
-                region_report["compliance_score"] = round((region_report["compliant"] / region_report["total"]) * 100, 2)
-            else:
-                region_report["compliance_score"] = 100.0
-            
-        except Exception as e:
-            logger.error("Failed to audit region %s: %s", region, e)
-            report["regions"][region] = {"error": str(e), "compliance_score": 0.0}
+            for res in inv["resources"]:
+                arn, tags, rtype = res["arn"], res["tags"], res["resource_type"]
+                if not resource_types and COMPLIANCE_SCOPE != "all" and not type_matches(rtype, mapped_types):
+                    coverage["unmapped_types"][rtype] = coverage["unmapped_types"].get(rtype, 0) + 1
+                    continue
+
+                validation_result = governance_engine.evaluate(
+                    tags, resource_id=arn, extra_required=mandatory_tags
+                )
+                is_compliant = validation_result.compliant
+                bucket["resources"].append({
+                    "ResourceARN": arn,
+                    "ResourceType": rtype,
+                    "IsCompliant": is_compliant,
+                    "NeverTagged": bool(res.get("never_tagged")),
+                    "Violations": [v.to_dict() for v in validation_result.violations],
+                    "Warnings": [w.to_dict() for w in validation_result.warnings],
+                    "Tags": tags,
+                    "NormalizedTags": validation_result.normalized_tags
+                })
+                bucket["total"] += 1
+                bucket["compliant" if is_compliant else "non_compliant"] += 1
+                coverage["never_tagged"] += bool(res.get("never_tagged"))
+
+                acct = account_of(arn) if account is None else account
+                a = report["accounts"].setdefault(acct, {"total": 0, "compliant": 0, "errors": {}})
+                a["total"] += 1
+                a["compliant"] += is_compliant
+
+    for region, bucket in report["regions"].items():
+        errs = region_errors.get(region, [])
+        if errs and len(errs) == len(accounts):
+            # Every account failed in this region
+            report["regions"][region] = {"error": errs[0], "compliance_score": 0.0}
+            continue
+        bucket["compliance_score"] = round(bucket["compliant"] * 100 / bucket["total"], 2) if bucket["total"] else 100.0
+        report["summary"]["total_resources"] += bucket["total"]
+        report["summary"]["compliant"] += bucket["compliant"]
+        report["summary"]["non_compliant"] += bucket["non_compliant"]
+
+    for a in report["accounts"].values():
+        a["compliance_score"] = round(a["compliant"] * 100 / a["total"], 2) if a["total"] else 100.0
 
     if report["summary"]["total_resources"] > 0:
         report["summary"]["compliance_score"] = round((report["summary"]["compliant"] / report["summary"]["total_resources"]) * 100, 2)
-        
+
+    failed_regions = [r for r, d in report["regions"].items() if d.get("error")]
+    report["summary"]["failed_regions"] = failed_regions
+    report["summary"]["failed_accounts"] = sorted(k for k, v in report["accounts"].items()
+                                                  if v["errors"] and len(v["errors"]) == len(target_regions))
+    report["summary"]["accounts_scanned"] = len(accounts)
+    report["summary"]["coverage"] = coverage
+    report["summary"]["accounts"] = report["accounts"]
+    duration = time.perf_counter() - started
+    report["summary"]["duration_seconds"] = round(duration, 2)
+    if failed_regions and len(failed_regions) == len(target_regions):
+        record_scan_outcome("failed", failed_regions)
+    else:
+        record_scan_outcome("partial" if failed_regions else "success", failed_regions)
+        record_compliance_report(report, duration)
     return report
+
+def generate_organization_report(regions: List[str], mandatory_tags: List[str] = MANDATORY_TAGS, resource_types: List[str] = None):
+    """
+    Mock implementation of cross-account scanning.
+    In a real scenario, this would:
+    1. Call organizations:ListAccounts
+    2. Iterate over accounts
+    3. Use CrossAccountManager.assume_role(account_id)
+    4. Pass the assumed session to generate_report
+    """
+    logger.info("Generating organization-wide report...")
+    org_client = boto3.client('organizations')
+    try:
+        # Paginator for accounts would go here
+        pass
+    except Exception as e:
+        logger.warning("Not in an AWS Organization or lack permissions. Generating local only.")
+        
+    return generate_report(regions, mandatory_tags, resource_types)
 
 def lambda_handler(event, context):
     logger.info("Received event: %s", event)

@@ -3,10 +3,28 @@ from typing import Any, Dict, List, Optional
 from botocore.exceptions import BotoCoreError, ClientError
 
 from src.clients import get_tagging_client
-from src.config import DEFAULT_REGION
+from src.config import (
+    DEFAULT_REGION, 
+    TAG_API_BATCH_SIZE,
+    GOVERNANCE_SCHEMA_PATH, 
+    GOVERNANCE_UNKNOWN_TAGS, 
+    GOVERNANCE_STRICT_MODE,
+    GOVERNANCE_NORMALIZATION
+)
 from src.logging_config import get_logger
+from src.governance.engine import TagGovernanceEngine
+from src.governance.schema_provider import FileSchemaProvider
+from src.observability.metrics import record_tag_writes
 
 logger = get_logger(__name__)
+
+# Initialize Governance Engine
+schema_provider = FileSchemaProvider(GOVERNANCE_SCHEMA_PATH)
+governance_engine = TagGovernanceEngine(
+    schema_provider=schema_provider,
+    unknown_tags_behavior=GOVERNANCE_UNKNOWN_TAGS,
+    enable_normalization=GOVERNANCE_NORMALIZATION
+)
 
 
 def get_client(region: str):
@@ -49,10 +67,10 @@ def tag_resources(arns: List[str], tags: Dict[str, str], default_region: str) ->
     for reg, reg_arns in region_groups.items():
         try:
             client = get_client(reg)
-            # Max 20 resources per call
-            BATCH_SIZE = 20
-            for i in range(0, len(reg_arns), BATCH_SIZE):
-                batch = reg_arns[i : i + BATCH_SIZE]
+            # TagResources accepts at most 20 ARNs per call
+            batch_size = max(1, min(TAG_API_BATCH_SIZE, 20))
+            for i in range(0, len(reg_arns), batch_size):
+                batch = reg_arns[i : i + batch_size]
                 resp = client.tag_resources(ResourceARNList=batch, Tags=tags)
                 
                 failed = resp.get("FailedResourcesMap", {})
@@ -67,25 +85,68 @@ def tag_resources(arns: List[str], tags: Dict[str, str], default_region: str) ->
     return results
 
 
+def collect_arns(event: Dict[str, Any], validate: bool = True) -> List[str]:
+    """ARNs from 'arn' / 'resource_arn' (single) and 'arns' (list), de-duplicated, order kept."""
+    raw: List[Any] = []
+    for key in ("arn", "resource_arn"):
+        if event.get(key):
+            raw.append(event[key])
+    arns_field = event.get("arns") or []
+    if isinstance(arns_field, str):
+        arns_field = [arns_field]
+    if not isinstance(arns_field, list):
+        raise ValueError("'arns' must be a list of ARNs.")
+    raw.extend(arns_field)
+
+    out: List[str] = []
+    for a in raw:
+        a = str(a).strip()
+        if validate and not a.startswith("arn:"):
+            raise ValueError(f"Invalid ARN: {a!r}")
+        if a not in out:
+            out.append(a)
+    return out
+
+
 def lambda_handler(event, context):
     logger.info("Received event: %s", event)
 
-    # Input can be single ARN or list of ARNs
-    arn = event.get("arn")
-    arns = event.get("arns", [])
-    if arn:
-        arns.append(arn)
-    
     tags = event.get("tags", {})
     region = str(event.get("region", DEFAULT_REGION)).strip()
 
     try:
+        arns = collect_arns(event)
         if not arns:
             raise ValueError("Field 'arn' or 'arns' is required.")
         if not tags or not isinstance(tags, dict):
             raise ValueError("Field 'tags' must be a non-empty object.")
+        bad_keys = [k for k in tags if not isinstance(k, str) or not k.strip() or k.lower().startswith("aws:")]
+        if bad_keys:
+            raise ValueError(f"Invalid tag keys (empty or reserved 'aws:' prefix): {bad_keys}")
+        if any(not isinstance(v, (str, int, float)) for v in tags.values()):
+            raise ValueError("Tag values must be strings.")
+        tags = {k.strip(): str(v).strip() for k, v in tags.items()}
 
-        result = tag_resources(arns, tags, region)
+        # Governance Engine: Normalize and Validate.
+        # A write is a partial update: only the provided keys are validated; tags already
+        # on the resource are untouched, so required-tag checks don't apply here.
+        validation_result = governance_engine.evaluate(tags, partial=True)
+        
+        if GOVERNANCE_STRICT_MODE and not validation_result.compliant:
+            logger.warning("Tag validation failed in strict mode: %s", validation_result.violations)
+            return build_response(400, {
+                "message": "Tag validation failed",
+                "violations": validation_result.to_dict()["violations"]
+            })
+            
+        if not validation_result.compliant:
+            logger.warning("Tag validation warnings (proceeding because strict mode is off): %s", validation_result.violations)
+
+        tags_to_apply = validation_result.normalized_tags
+
+        result = tag_resources(arns, tags_to_apply, region)
+        failed_count = len(result["failed_resources"])
+        record_tag_writes(result["tagged_count"], failed_count)
 
         if result["failed_resources"]:
             return build_response(207, {
@@ -95,7 +156,9 @@ def lambda_handler(event, context):
 
         return build_response(200, {
             "message": "Successfully tagged resources",
-            "count": result["tagged_count"]
+            "count": result["tagged_count"],
+            "applied_tags": tags_to_apply,
+            "warnings": [w.to_dict() for w in validation_result.warnings],
         })
 
     except ValueError as e:

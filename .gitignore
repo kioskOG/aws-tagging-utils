@@ -167,3 +167,9 @@ cython_debug/
 
 # Coverage HTML
 htmlcov/
+
+# Local runtime data (SQLite scans/audit log, legacy JSON cache)
+app.db
+app.db-*
+.compliance_cache.json
+data/

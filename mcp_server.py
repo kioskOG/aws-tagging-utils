@@ -8,9 +8,14 @@ Run:
     mcp_server
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# stdio transport: stdout is the JSON-RPC channel, so logs and metrics must not use it.
+os.environ.setdefault("LOG_STREAM", "stderr")
+os.environ["METRICS_EMF_ENABLED"] = "false"
 
 from fastmcp import FastMCP
 
@@ -19,7 +24,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import DEFAULT_REGION
+from src.config import DEFAULT_REGION, MCP_READ_ONLY
 from src.logging_config import get_logger
 from src.tag_read import RESOURCE_TYPE_MAP, lambda_handler as read_handler
 from src.tag_writer import lambda_handler as write_handler
@@ -28,6 +33,13 @@ from src.tag_report import lambda_handler as report_handler
 from src.tag_sync import lambda_handler as sync_handler
 
 logger = get_logger(__name__)
+
+
+def _deny_if_read_only(tool: str) -> Optional[Dict[str, Any]]:
+    if MCP_READ_ONLY:
+        logger.warning("Refused %s: MCP_READ_ONLY is enabled", tool)
+        return {"statusCode": 403, "body": {"message": f"{tool} is disabled: the MCP server runs with MCP_READ_ONLY=true."}}
+    return None
 
 # Create MCP server
 mcp = FastMCP("AWS Tagging Utils")
@@ -93,6 +105,9 @@ def write_tags(
         tags: Dictionary of tags to apply (e.g., {"Owner": "DevOps"}).
         region: Default AWS region for the request.
     """
+    denied = _deny_if_read_only("write_tags")
+    if denied:
+        return denied
     logger.info("write_tags called", extra={"arn_count": len(arns), "aws_region": region})
     payload = {
         "arns": arns,
@@ -115,6 +130,9 @@ def apply_governance(
         region: Single region to scan (used if regions not provided).
         regions: List of regions to scan, or pass a single region.
     """
+    denied = _deny_if_read_only("apply_governance")
+    if denied:
+        return denied
     target = regions or [region]
     logger.info("apply_governance called", extra={"aws_region": target})
     payload = {"action": "scan", "regions": target}
@@ -155,30 +173,93 @@ def get_tag_report(
 @mcp.tool()
 def sync_tags(
     source_arn: str,
-    target_type: str = "vpc_children",
-    region: str = DEFAULT_REGION
+    target_type: str = "vpc",
+    region: str = DEFAULT_REGION,
+    overwrite: bool = False,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
-    Sync tags from a source resource to related target resources.
-
-    Currently supports VPC → children propagation (Subnets, Security Groups,
-    Route Tables, Internet Gateways, NAT Gateways).
+    Propagate tags from a parent resource to its children (undoable change set).
 
     Args:
-        source_arn: The ARN of the source VPC resource.
-        target_type: Type of sync operation. Currently only 'vpc_children' is supported.
+        source_arn: Parent ARN, ID or name (e.g. a VPC ID, ASG name, stack name).
+        target_type: Rule: vpc, ec2_instance, ebs_volume, asg, ecs_service, cloudformation,
+            rds_cluster, eks_cluster, elbv2, lambda ("vpc_children" is accepted for vpc).
+        region: AWS region.
+        overwrite: Also replace child values that differ from the parent.
+        dry_run: Only preview the changes.
+    """
+    if not dry_run:
+        denied = _deny_if_read_only("sync_tags")
+        if denied:
+            return denied
+    rule = "vpc" if target_type == "vpc_children" else target_type
+    logger.info("sync_tags called", extra={"aws_region": region, "resource_type": rule})
+    return sync_handler({"action": "propagate", "rule": rule, "parent": source_arn, "region": region,
+                         "overwrite": overwrite, "dry_run": dry_run, "actor": "mcp"}, None)
+
+
+@mcp.tool()
+def check_tag_propagation(rules: Optional[List[str]] = None, region: str = DEFAULT_REGION) -> Dict[str, Any]:
+    """
+    Find children that don't carry their parent's tags (EC2 → volumes/ENIs, ASG → instances,
+    ECS service → tasks, CloudFormation stack → resources, ...) and parents whose tag propagation
+    is switched off (ASG PropagateAtLaunch, ECS propagateTags). Read-only.
+
+    Args:
+        rules: Subset of rules to check (default: all).
         region: AWS region.
     """
-    # Extract VPC ID from ARN (e.g. arn:aws:ec2:us-east-2:123456:vpc/vpc-abc123)
-    vpc_id = source_arn.split("/")[-1] if "/" in source_arn else source_arn
-    logger.info("sync_tags called", extra={"aws_region": region, "resource_type": target_type})
-    payload = {
-        "action": "sync_vpc",
-        "vpc_id": vpc_id,
-        "region": region
-    }
-    result = sync_handler(payload, None)
-    return result
+    from src.propagation import check
+    return check(rules, [region])
+
+
+@mcp.tool()
+def preview_tag_changes(arns: List[str], tags: Dict[str, str], overwrite: bool = False) -> Dict[str, Any]:
+    """
+    Preview a bulk tag change: per-resource diff and compliance before/after. Read-only.
+    Pass the returned preview_token to apply_tag_changes.
+    """
+    from src.changesets import preview
+    return preview([{"arn": a, "tags": tags} for a in arns], overwrite)
+
+
+@mcp.tool()
+def apply_tag_changes(arns: List[str], tags: Dict[str, str], overwrite: bool = False,
+                      preview_token: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Apply a bulk tag change as an undoable change set (use undo_tag_changes with its id).
+    """
+    denied = _deny_if_read_only("apply_tag_changes")
+    if denied:
+        return denied
+    from src.changesets import apply
+    return apply([{"arn": a, "tags": tags} for a in arns], overwrite, "mcp", preview_token=preview_token,
+                 description=f"MCP bulk change of {len(arns)} resources")
+
+
+@mcp.tool()
+def undo_tag_changes(change_set_id: str) -> Dict[str, Any]:
+    """Undo a change set; keys changed by someone else since are left alone and reported."""
+    denied = _deny_if_read_only("undo_tag_changes")
+    if denied:
+        return denied
+    from src.changesets import undo
+    return undo(change_set_id, "mcp")
+
+
+@mcp.tool()
+def suggest_tag_values(arns: List[str], keys: List[str]) -> Dict[str, Any]:
+    """Suggest values for missing tags from related resources in the latest scan. Read-only."""
+    from src.suggestions import suggest
+    return suggest(arns, keys)
+
+
+@mcp.tool()
+def compliance_leaderboard(dimension: str = "team") -> Dict[str, Any]:
+    """Compliance ranking by team, account, ou or service, with week-over-week change. Read-only."""
+    from src.insights import leaderboard
+    return leaderboard(dimension)
 
 
 def main():

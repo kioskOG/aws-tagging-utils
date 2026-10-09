@@ -1,0 +1,932 @@
+openapi: 3.0.3
+info:
+  title: AWS Tagging Utils API
+  version: 0.3.0
+  description: Enterprise API for AWS tagging governance, FinOps, and compliance.
+paths:
+  /health:
+    get:
+      summary: Lightweight health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /ready:
+    get:
+      summary: Readiness probe (SQLite + schema; no AWS calls)
+      responses:
+        '200':
+          description: Ready
+        '503':
+          description: Not ready
+  /metrics:
+    get:
+      summary: Prometheus metrics (text exposition format)
+      description: Requires `Authorization Bearer <METRICS_AUTH_TOKEN>` when that variable is set.
+      responses:
+        '200':
+          description: Metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          description: Missing or invalid metrics token
+        '404':
+          description: OBSERVABILITY_ENABLED=false
+  /api/me:
+    get:
+      summary: Current identity, roles, permissions and enabled features
+      responses:
+        '200':
+          description: Identity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id: {type: string}
+                  roles: {type: array, items: {type: string}}
+                  permissions: {type: object, additionalProperties: {type: boolean}}
+                  features: {type: object, additionalProperties: {type: boolean}}
+                  default_region: {type: string}
+                  mandatory_tags: {type: array, items: {type: string}}
+                  version: {type: string}
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /api/compliance/history:
+    get:
+      summary: Compliance score per completed scan, oldest first
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, default: 30, maximum: 500}
+      responses:
+        '200':
+          description: Scan summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scans:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        scan_id: {type: integer}
+                        timestamp: {type: string}
+                        regions: {type: array, items: {type: string}}
+                        total_resources: {type: integer}
+                        compliant: {type: integer}
+                        non_compliant: {type: integer}
+                        compliance_score: {type: number}
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /api/compliance/export.csv:
+    get:
+      summary: Latest scan as CSV (one row per resource)
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /api/inventory/coverage:
+    get:
+      summary: Inventory coverage of the latest scan (never-tagged resources, unmapped resource types)
+      responses:
+        '200': {description: Coverage}
+  /api/leaderboard:
+    get:
+      summary: Compliance leaderboard with week-over-week change
+      parameters:
+        - {name: dimension, in: query, schema: {type: string, enum: [team, account, ou, service], default: team}}
+        - {name: compare_days, in: query, schema: {type: integer, default: 7}}
+      responses:
+        '200': {description: Ranked rows}
+  /api/me/resources:
+    get:
+      summary: Owner view — resources, violations, expiring exemptions and unallocated cost of the signed-in user
+      parameters:
+        - {name: owner, in: query, description: Admins only, view another owner, schema: {type: string}}
+        - {name: cost, in: query, description: "0 skips Cost Explorer", schema: {type: string}}
+      responses:
+        '200': {description: Owner view}
+        '403': {description: owner= used by a non-admin}
+  /api/organization/refresh:
+    post:
+      summary: Reload account names and OUs from AWS Organizations (admins)
+      responses:
+        '200': {description: Number of accounts}
+  /api/bulk/preview:
+    post:
+      summary: Preview a bulk tag change (diff + compliance before/after + preview_token)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arns: {type: array, items: {type: string}}
+                tags: {type: object, additionalProperties: {type: string}}
+                targets: {type: array, items: {type: object}}
+                overwrite: {type: boolean}
+      responses:
+        '200': {description: Preview}
+  /api/bulk/apply:
+    post:
+      summary: Apply a bulk tag change as an undoable change set
+      responses:
+        '201': {description: Change set}
+        '409': {description: PLAN_CHANGED — resources changed since the preview}
+  /api/changesets:
+    get:
+      summary: List change sets (newest first)
+      responses:
+        '200': {description: Change sets}
+  /api/changesets/{cs_id}:
+    get:
+      summary: Change set with per-resource before/after
+      parameters: [{name: cs_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Change set}
+        '404': {description: Not found}
+  /api/changesets/{cs_id}/undo:
+    post:
+      summary: Undo a change set (keys changed since are left alone and reported as conflicts)
+      parameters: [{name: cs_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '201': {description: Undo change set}
+        '409': {description: Already undone}
+  /api/suggestions:
+    post:
+      summary: Suggest tag values from related resources (same stack, EKS cluster, name prefix, account/service)
+      responses:
+        '200': {description: Per-resource and aggregate suggestions}
+  /api/propagation:
+    get:
+      summary: Propagation rules, latest check and its findings
+      responses:
+        '200': {description: Propagation state}
+  /api/propagation/run:
+    post:
+      summary: Start a propagation check in the background
+      responses:
+        '202': {description: Started}
+  /api/propagation/preview:
+    post:
+      summary: Preview fixing selected findings
+      responses:
+        '200': {description: Preview incl. config_changes}
+  /api/propagation/apply:
+    post:
+      summary: Fix selected findings as an undoable change set
+      responses:
+        '201': {description: Change set}
+  /api/meta/resource-types:
+    get:
+      summary: Get supported resource types
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aliases:
+                    type: array
+                    items:
+                      type: string
+                  map:
+                    type: object
+  /api/read:
+    post:
+      summary: Read tags from AWS resources
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '500':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/write:
+    post:
+      summary: Write tags to AWS resources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arn:
+                  type: string
+                arns:
+                  type: array
+                  items:
+                    type: string
+                tags:
+                  type: object
+      responses:
+        '200':
+          description: Fully successful write
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+        '207':
+          description: Partial success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  details:
+                    type: object
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '500':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/gov:
+    post:
+      summary: Validate tags against governance rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/report:
+    post:
+      summary: Generate a synchronous compliance report
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '500':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/sync:
+    post:
+      summary: Sync tags across accounts/regions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '500':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/compliance/refresh:
+    post:
+      summary: Trigger a background compliance refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                regions:
+                  type: array
+                  items:
+                    type: string
+                mandatory_tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '202':
+          description: Refresh started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        '200':
+          description: Already refreshing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/compliance/status:
+    get:
+      summary: Get status of background compliance refresh
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_refreshing:
+                    type: boolean
+                  is_stale:
+                    type: boolean
+                  last_refresh_error:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/compliance/summary:
+    get:
+      summary: Get compliance summary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compliance_pct:
+                    type: number
+                  total_resources:
+                    type: integer
+                  compliant:
+                    type: integer
+                  non_compliant:
+                    type: integer
+                  _meta:
+                    type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/dashboard:
+    get:
+      summary: Get dashboard statistics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compliance_pct:
+                    type: number
+                  total_resources:
+                    type: integer
+                  compliant_resources:
+                    type: integer
+                  non_compliant_resources:
+                    type: integer
+                  active_violations:
+                    type: integer
+                  pending_remediation:
+                    type: integer
+                  active_exemptions:
+                    type: integer
+                  protected_violations:
+                    type: integer
+                  total_spend:
+                    type: number
+                  tagged_spend:
+                    type: number
+                  unallocated_spend:
+                    type: number
+                  allocation_pct:
+                    type: number
+                  _meta:
+                    type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/schema:
+    get:
+      summary: Get governance schema definitions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    tag:
+                      type: string
+                    required:
+                      type: boolean
+                    protected:
+                      type: boolean
+                    finops:
+                      type: boolean
+                    allowed_values:
+                      type: array
+                      items:
+                        type: string
+                    regex:
+                      type: string
+                    description:
+                      type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/compliance:
+    get:
+      summary: Get compliance resource list
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                        account:
+                          type: string
+                        region:
+                          type: string
+                        status:
+                          type: string
+                        missing_tags:
+                          type: array
+                          items:
+                            type: string
+                        invalid_tags:
+                          type: array
+                          items:
+                            type: string
+                        protected_violations:
+                          type: array
+                          items:
+                            type: string
+                        remediation_state:
+                          type: string
+                        exemption_state:
+                          type: string
+                  _meta:
+                    type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/finops:
+    get:
+      summary: Get FinOps report (stale-while-revalidate)
+      responses:
+        '200':
+          description: OK (Cached Data)
+          content:
+            application/json:
+              schema:
+                type: object
+        '202':
+          description: Not ready (Refreshing)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+                  _meta:
+                    type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/finops/refresh:
+    post:
+      summary: Trigger a background FinOps refresh
+      responses:
+        '202':
+          description: Refresh started
+        '200':
+          description: Already refreshing
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/finops/status:
+    get:
+      summary: Get status of background FinOps refresh
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_refreshing:
+                    type: boolean
+                  is_stale:
+                    type: boolean
+                  last_refresh_error:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/audit:
+    get:
+      summary: Get recent audit logs
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit_events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        timestamp:
+                          type: string
+                        actor:
+                          type: string
+                        action:
+                          type: string
+                        resource_arn:
+                          type: string
+                        result:
+                          type: string
+                        details:
+                          type: object
+                        request_id:
+                          type: string
+                  _meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/security:
+    get:
+      summary: Get security status (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/organization:
+    get:
+      summary: Get organization details (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/remediation:
+    get:
+      summary: List recent remediation actions (newest first)
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, default: 100, maximum: 500}
+      responses:
+        '200':
+          description: Actions and the count of pending ones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions: {type: array, items: {type: object}}
+                  pending: {type: integer}
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      summary: Request synchronous tag remediation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - resource_arn
+                - requested_tags
+              properties:
+                resource_arn:
+                  type: string
+                requested_tags:
+                  type: object
+                idempotency_key:
+                  type: string
+      responses:
+        '201':
+          description: Remediation action created and executed
+        '200':
+          description: Remediation action executed
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Idempotency key mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/StandardError'
+  /api/remediation/{action_id}:
+    get:
+      summary: Get remediation action status
+      parameters:
+        - name: action_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/StandardError'
+  /api/exemptions:
+    get:
+      summary: List all active exemptions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exemptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Exemption'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Create a new exemption
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: string
+                environment:
+                  type: string
+                resource_type:
+                  type: string
+                resource_id:
+                  type: string
+                expires_at:
+                  type: string
+                  format: date-time
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exemption'
+        '400':
+          description: Bad Request (Unsupported Scope Combination)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '409':
+          description: Conflict (Equal Specificity Conflict)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/exemptions/{exemption_id}:
+    get:
+      summary: Get an exemption by ID
+      parameters:
+        - in: path
+          name: exemption_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exemption'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    delete:
+      summary: Revoke an exemption by ID
+      parameters:
+        - in: path
+          name: exemption_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Exemption Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  id:
+                    type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/cicd:
+    get:
+      summary: Get CI/CD metrics (Not Implemented)
+      responses:
+        '501':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+components:
+  schemas:
+    APIError:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+    Exemption:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        account_id:
+          type: string
+        environment:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+  responses:
+    StandardError:
+      description: Standard API Error Response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    UnauthorizedError:
+      description: Unauthorized (No trusted ALB identity)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    ForbiddenError:
+      description: Forbidden (Insufficient RBAC permissions)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'

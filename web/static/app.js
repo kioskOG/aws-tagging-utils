@@ -1734,7 +1734,7 @@ async function loadMine() {
         return;
     }
     ent.mine = m;
-    setText('#mine-identity', `Resources whose ${'Owner'} tag matches ${m.identifiers.join(' or ') || 'you'}` +
+    setText('#mine-identity', `Resources whose ${(m.match_tags || ['Owner']).join(' / ')} tag matches ${m.identifiers.join(' or ') || 'you'}` +
         (m.owner_values.length ? ` (values: ${m.owner_values.slice(0, 3).join(', ')}${m.owner_values.length > 3 ? '…' : ''})` : ''));
     setText('#mine-total', m.summary.total.toLocaleString());
     setText('#mine-pct', `${m.summary.compliance_pct}% compliant`);
@@ -1775,7 +1775,7 @@ async function loadMine() {
             <td><span class="status-badge ${r.status === 'COMPLIANT' ? 'ok' : 'err'}">${escHtml(r.status)}</span></td>
             <td>${renderTagsCell(r.tags)}</td>
             <td>${renderIssuesCell(r.violations, r.warnings)}</td></tr>`).join('')
-            : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">No resources carry your identity in ${escHtml('Owner')}. Ask an admin to tag them, or check DEV_AUTH_EMAIL / the ALB email claim.</td></tr>`;
+            : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">No resources carry your identity in ${escHtml((m.match_tags || ['Owner']).join(' / '))}. Ask an admin to tag them, or check DEV_AUTH_EMAIL / the ALB email claim.</td></tr>`;
     }
     applyPermissions();
 }

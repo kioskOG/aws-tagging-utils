@@ -5,7 +5,9 @@ Owner matching
 --------------
 A resource belongs to a user when any OWNER_MATCH_TAGS value (default: Owner) equals one of
 the user's identifiers (user id, email), case-insensitively, or ends with "/<identifier>"
-(the AWS SSO session format "AWSReservedSSO_Role_x/jane@example.com").
+(the AWS SSO session format "AWSReservedSSO_Role_x/jane@example.com"), or when its
+Application tag equals an identifier. is_owned() is the single rule used both for the
+owner view and for ApplicationOwner write checks.
 
 Leaderboards
 ------------
@@ -51,6 +53,14 @@ def owner_matches(identifiers: Iterable[str], tags: Dict[str, str]) -> bool:
             if value == ident or value.endswith("/" + ident):
                 return True
     return False
+
+
+def is_owned(identifiers: Iterable[str], tags: Dict[str, str]) -> bool:
+    ids = [i.lower() for i in identifiers if i]
+    if owner_matches(ids, tags):
+        return True
+    app = next((str(v).strip().lower() for k, v in (tags or {}).items() if str(k).lower() == "application"), "")
+    return bool(app) and app in ids
 
 
 # ── Owner cost (Cost Explorer, cached) ──────────────────────────────
@@ -113,7 +123,7 @@ def owner_view(identifiers: List[str], rows: List[Dict[str, Any]],
                active_exemptions: Optional[List[Dict[str, Any]]], exemption_manager=None,
                include_cost: bool = True) -> Dict[str, Any]:
     """`rows` are flattened compliance rows (web.app._flatten_resources)."""
-    mine = [r for r in rows if owner_matches(identifiers, r.get("tags", {}))]
+    mine = [r for r in rows if is_owned(identifiers, r.get("tags", {}))]
     owner_values = sorted({str(v) for r in mine for k, v in (r.get("tags") or {}).items()
                            if k.lower() in {t.lower() for t in OWNER_MATCH_TAGS}})
     non_compliant = [r for r in mine if r["status"] != "COMPLIANT"]
@@ -155,6 +165,7 @@ def owner_view(identifiers: List[str], rows: List[Dict[str, Any]],
     total = len(mine)
     return {
         "identifiers": identifiers,
+        "match_tags": list(OWNER_MATCH_TAGS) + ["Application"],
         "owner_values": owner_values,
         "summary": {
             "total": total, "non_compliant": len(non_compliant),

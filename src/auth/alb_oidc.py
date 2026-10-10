@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import urllib.request
 import threading
 import jwt
@@ -17,6 +18,8 @@ import time
 _KEY_CACHE: Dict[str, tuple[str, float]] = {}
 _KEY_CACHE_LOCK = threading.Lock()
 _CACHE_TTL_SECONDS = 3600  # 1 hour cache TTL
+# ALB key ids are UUIDs; anything else must never reach the key URL
+_KID_RE = re.compile(r"^[A-Za-z0-9-]{1,128}$")
 
 # By default, use the region of the deployment, fallback to us-east-1
 ALB_REGION = os.environ.get("AUTH_AWS_REGION", os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1")))
@@ -31,7 +34,7 @@ def _get_alb_public_key(kid: str) -> str:
                 return pub_key
             
     # Validate kid to prevent SSRF or directory traversal (should be alphanumeric/uuid-like)
-    if not kid.isalnum() and "-" not in kid:
+    if not _KID_RE.match(kid):
         raise APIError("Invalid Key ID format in ALB JWT", status_code=401, error_code="UNAUTHORIZED")
         
     url = f"https://public-keys.auth.elb.{ALB_REGION}.amazonaws.com/{kid}"
@@ -138,12 +141,13 @@ def get_alb_identity(headers: Dict[str, str]) -> Optional[UserIdentity]:
             # We enforce require=["sub"] in jwt.decode, so this shouldn't happen, but safe fallback logic just in case
             raise APIError("Missing 'sub' claim in verified ALB JWT", status_code=401, error_code="UNAUTHORIZED")
             
-        # 3. Map groups to roles
-        # Note: If corporate OIDC maps groups into another claim name (e.g. 'cognito:groups'), it could be retrieved here.
-        # By default, we look for 'groups' as standard mapping.
-        groups = payload.get("groups", [])
+        # 3. Map groups to roles. The claim name differs per IdP (e.g. 'cognito:groups'), so it is configurable.
+        groups_claim = os.environ.get("AUTH_GROUPS_CLAIM", "groups")
+        groups = payload.get(groups_claim) or []
         if isinstance(groups, str):
-            groups = [groups]
+            groups = [g.strip() for g in groups.split(",") if g.strip()]
+        if not groups:
+            logger.warning(f"Verified ALB JWT for {user_id} has no '{groups_claim}' claim; user gets no roles")
             
         role_mapping = get_role_mapping()
         roles = []

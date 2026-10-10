@@ -174,3 +174,10 @@ app.db-*
 .compliance_cache.json
 data/
 **app.db**
+
+# Local scratch work, one-off patch scripts and generated reports
+scratch/
+scratch*.py
+patch_*.py
+prompt.md
+report-*.html

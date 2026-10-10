@@ -73,7 +73,7 @@ const AWS_REGIONS = [
       render() {
         let html = `
             <div class="ms-container" id="msc-${this.tabKey}">
-                <div class="ms-header" onclick="document.getElementById('msc-${this.tabKey}').classList.toggle('open')">
+                <div class="ms-header" data-click="ms-open" data-arg="${this.tabKey}">
                     <div class="ms-tags">
                        ${this.selected.length === AWS_REGIONS.length ? `<span class="ms-tag">All Regions</span>` :
             this.selected.length === 0 ? `<span class="ms-placeholder">Select regions...</span>` :
@@ -89,17 +89,16 @@ const AWS_REGIONS = [
                     <div class="ms-controls" style="flex-direction: column; gap: 10px;">
                         <input type="text" placeholder="Search regions..." class="region-search-input"
                                style="font-size: 0.85rem;"
-                               onclick="event.stopPropagation()"
-                               oninput="regionPickers['${this.tabKey}'].filterList(this.value)">
+                               data-input="ms-filter" data-arg="${this.tabKey}">
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-ghost" style="flex:1; justify-content:center" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(true)">All</button>
-                            <button class="btn-ghost" style="flex:1; justify-content:center" onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].selectAll(false)">Clear</button>
+                            <button class="btn-ghost" style="flex:1; justify-content:center" data-click="ms-all" data-arg="${this.tabKey}">All</button>
+                            <button class="btn-ghost" style="flex:1; justify-content:center" data-click="ms-none" data-arg="${this.tabKey}">Clear</button>
                         </div>
                     </div>
                     <div class="ms-list">
                         ${AWS_REGIONS.map(r => `
                             <div class="ms-opt" data-region-id="${r.id}" data-region-name="${r.name}"
-                                 onclick="event.stopPropagation(); regionPickers['${this.tabKey}'].toggle('${r.id}')">
+                                 data-click="ms-toggle" data-arg="${this.tabKey}">
                                 <input type="checkbox" ${this.selected.includes(r.id) ? 'checked' : ''} style="pointer-events:none">
                                 <div class="ms-opt-text">
                                     <span class="ms-opt-name">${r.name}</span>
@@ -629,7 +628,7 @@ const AWS_REGIONS = [
           <div class="score-meta">
             <div style="display:flex; justify-content:space-between; align-items:flex-start">
               <h3 style="margin:0">Compliance scorecard</h3>
-              <button class="btn btn-primary" onclick="transferReportToBatch()" style="width:auto; padding:7px 14px; font-size:0.82rem">Send to batch fix</button>
+              <button class="btn btn-primary" data-click="report-to-batch" style="width:auto; padding:7px 14px; font-size:0.82rem">Send to batch fix</button>
             </div>
             <p>${summary.compliant || 0} of ${summary.total_resources || 0} resources fully tagged<br>
                <span style="color:var(--danger)">${summary.non_compliant || 0} resources</span> need attention</p>
@@ -706,7 +705,7 @@ const AWS_REGIONS = [
       }
       if (!dryRun && data.change_set_id) {
         html += `<div class="card" style="margin-top:1rem">Change set <code>${escapeHtml(data.change_set_id)}</code> — ${escapeHtml(data.status)}.
-          <button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escapeHtml(data.change_set_id)}')">Undo</button></div>`;
+          <button class="btn-ghost" data-perm="modify_tags" data-click="undo-change-set" data-arg="${escapeHtml(data.change_set_id)}">Undo</button></div>`;
       }
       if (data.errors && data.errors.length) {
         html += `<div style="margin-top:1rem;padding:1rem;background:var(--danger-soft);border-radius:10px"><div style="color:var(--danger);font-weight:700;margin-bottom:8px">⚠ Errors</div><div style="font-size:0.8rem;color:var(--danger)">${data.errors.map(escapeHtml).join('<br>')}</div></div>`;
@@ -1471,10 +1470,54 @@ function renderPagination(page, totalPages) {
     if (!el) return;
     if (totalPages <= 1) { el.innerHTML = ''; return; }
     el.innerHTML = `
-        <button class="btn-ghost" ${page === 0 ? 'disabled style="opacity:0.3"' : ''} onclick="renderCompliancePage(${page - 1})">← Prev</button>
+        <button class="btn-ghost" ${page === 0 ? 'disabled style="opacity:0.3"' : ''} data-click="compliance-page" data-arg="${page - 1}">← Prev</button>
         <span style="color:var(--muted)">Page ${page + 1} of ${totalPages}</span>
-        <button class="btn-ghost" ${page >= totalPages - 1 ? 'disabled style="opacity:0.3"' : ''} onclick="renderCompliancePage(${page + 1})">Next →</button>`;
+        <button class="btn-ghost" ${page >= totalPages - 1 ? 'disabled style="opacity:0.3"' : ''} data-click="compliance-page" data-arg="${page + 1}">Next →</button>`;
 }
+
+// Declarative UI events. Markup names an action with data-click / data-change / data-input
+// (plus an optional data-arg); there are no inline handlers, so the CSP can forbid them.
+const UI_ACTIONS = {
+    'refresh-compliance': () => triggerBackgroundRefresh(),
+    'toggle-trend-table': () => toggleTrendTable(),
+    'goto-schema': (el, e) => { e.preventDefault(); document.getElementById('ent-tab-schema').click(); },
+    'filter-compliance': () => filterComplianceTable(),
+    'select-all-filtered': () => selectAllFiltered(true),
+    'clear-all-filtered': () => selectAllFiltered(false),
+    'select-page': (el) => selectPage(el.checked),
+    'compliance-page': (el) => renderCompliancePage(Number(el.dataset.arg)),
+    'bulk-fix': () => openBulkFix(),
+    'bulk-fix-mine': () => openBulkFix(mineNonCompliant()),
+    'add-bulk-tag-row': () => document.getElementById('bulk-rows').insertAdjacentHTML('beforeend', bulkTagRow()),
+    'remove-tag-row': (el) => el.closest('.tag-edit-row').remove(),
+    'load-mine': () => loadMine(),
+    'refresh-org-directory': () => refreshOrgDirectory(),
+    'run-propagation': () => runPropagation(),
+    'render-propagation': () => renderPropagation(),
+    'prop-select-all': () => propSelectAll(true),
+    'preview-propagation-fix': () => previewPropagationFix(),
+    'clear-write-arns': () => { document.getElementById('write-arns').value = ''; toast('Inventory cleared', 'info'); },
+    'report-to-batch': () => transferReportToBatch(),
+    'undo-change-set': (el) => undoChangeSet(el.dataset.arg),
+    'view-change-set': (el) => viewChangeSet(el.dataset.arg),
+    'close-fix-tags': () => closeFixTagsModal(),
+    'fix-tags-confirm': () => fixTagsConfirm(),
+    'close-exempt': () => closeExemptModal(),
+    'exempt-confirm': () => exemptConfirm(),
+    'close-change': () => closeChangeModal(),
+    'ms-open': (el) => document.getElementById(`msc-${el.dataset.arg}`).classList.toggle('open'),
+    'ms-filter': (el) => regionPickers[el.dataset.arg].filterList(el.value),
+    'ms-all': (el) => regionPickers[el.dataset.arg].selectAll(true),
+    'ms-none': (el) => regionPickers[el.dataset.arg].selectAll(false),
+    'ms-toggle': (el) => regionPickers[el.dataset.arg].toggle(el.dataset.regionId),
+};
+['click', 'change', 'input'].forEach(type => document.addEventListener(type, (e) => {
+    const el = e.target.closest(`[data-${type}]`);
+    if (!el || el.disabled) return;
+    const fn = UI_ACTIONS[el.dataset[type]];
+    if (fn) fn(el, e);
+    else console.warn(`No UI action "${el.dataset[type]}"`);
+}));
 
 // Delegated row actions (no data is interpolated into inline JS)
 document.addEventListener('click', (e) => {
@@ -1734,7 +1777,7 @@ async function loadMine() {
         return;
     }
     ent.mine = m;
-    setText('#mine-identity', `Resources whose ${'Owner'} tag matches ${m.identifiers.join(' or ') || 'you'}` +
+    setText('#mine-identity', `Resources whose ${(m.match_tags || ['Owner']).join(' / ')} tag matches ${m.identifiers.join(' or ') || 'you'}` +
         (m.owner_values.length ? ` (values: ${m.owner_values.slice(0, 3).join(', ')}${m.owner_values.length > 3 ? '…' : ''})` : ''));
     setText('#mine-total', m.summary.total.toLocaleString());
     setText('#mine-pct', `${m.summary.compliance_pct}% compliant`);
@@ -1775,7 +1818,7 @@ async function loadMine() {
             <td><span class="status-badge ${r.status === 'COMPLIANT' ? 'ok' : 'err'}">${escHtml(r.status)}</span></td>
             <td>${renderTagsCell(r.tags)}</td>
             <td>${renderIssuesCell(r.violations, r.warnings)}</td></tr>`).join('')
-            : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">No resources carry your identity in ${escHtml('Owner')}. Ask an admin to tag them, or check DEV_AUTH_EMAIL / the ALB email claim.</td></tr>`;
+            : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">No resources carry your identity in ${escHtml((m.match_tags || ['Owner']).join(' / '))}. Ask an admin to tag them, or check DEV_AUTH_EMAIL / the ALB email claim.</td></tr>`;
     }
     applyPermissions();
 }
@@ -1851,8 +1894,8 @@ async function loadChanges() {
             <td style="font-size:0.85rem">${escHtml(cs.description || '')}<div class="chart-sub">${escHtml(cs.id)}${cs.undo_of ? ' · undoes ' + escHtml(cs.undo_of) : ''}${cs.undone_by ? ' · undone by ' + escHtml(cs.undone_by) : ''}</div></td>
             <td>${result || '-'}</td>
             <td><span class="status-badge ${CS_BADGE[cs.status] || 'info'}">${escHtml(cs.status)}</span></td>
-            <td style="white-space:nowrap"><button class="btn-ghost" onclick="viewChangeSet('${escHtml(cs.id)}')">View</button>
-                ${undoable ? `<button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escHtml(cs.id)}')">Undo</button>` : ''}</td></tr>`;
+            <td style="white-space:nowrap"><button class="btn-ghost" data-click="view-change-set" data-arg="${escHtml(cs.id)}">View</button>
+                ${undoable ? `<button class="btn-ghost" data-perm="modify_tags" data-click="undo-change-set" data-arg="${escHtml(cs.id)}">Undo</button>` : ''}</td></tr>`;
     }).join('');
     applyPermissions();
 }
@@ -1966,7 +2009,7 @@ async function doChangeApply() {
     const cs = res.data, sm = cs.summary || {};
     showModalStatus('#change-status', `✅ Change set ${cs.id}: ${sm.SUCCESS || 0} succeeded, ${sm.FAILED || 0} failed, ${sm.INVALID || 0} invalid. You can undo it from the Changes tab.`, sm.FAILED ? 'error' : 'success');
     $('#change-preview').innerHTML = renderChangeItems(cs.items, true) +
-        `<div style="margin-top:10px"><button class="btn-ghost" data-perm="modify_tags" onclick="undoChangeSet('${escHtml(cs.id)}')">↩ Undo this change set</button></div>`;
+        `<div style="margin-top:10px"><button class="btn-ghost" data-perm="modify_tags" data-click="undo-change-set" data-arg="${escHtml(cs.id)}">↩ Undo this change set</button></div>`;
     ap.textContent = 'Applied';
     $('#change-preview-btn').style.display = 'none';
     ent.selected.clear();
@@ -1981,7 +2024,7 @@ function bulkTagRow(key = '', value = '') {
     return `<div class="tag-edit-row">
         <input class="bulk-key" list="bulk-key-list" placeholder="Tag key" value="${escHtml(key)}">
         <input class="bulk-val" placeholder="Value" value="${escHtml(value)}">
-        <button class="btn-ghost" title="Remove" onclick="this.closest('.tag-edit-row').remove()">✕</button>
+        <button class="btn-ghost" title="Remove" data-click="remove-tag-row">✕</button>
         <div class="sugg"></div>
     </div>`;
 }
@@ -2005,7 +2048,7 @@ function openBulkFix(arnsOverride) {
               ${keys.length ? `Pre-filled with the keys missing or invalid on the selection.` : ''}</div>
             <div id="bulk-rows">${rows}</div>
             <div class="bulk-bar" style="margin-top:6px">
-              <button class="btn-ghost" onclick="document.getElementById('bulk-rows').insertAdjacentHTML('beforeend', bulkTagRow())">+ Add tag</button>
+              <button class="btn-ghost" data-click="add-bulk-tag-row">+ Add tag</button>
               <label class="chart-sub" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="bulk-overwrite"> Overwrite existing values</label>
             </div>`,
         onPreview: () => apiPost('/api/bulk/preview', bulkPayload(arns)),

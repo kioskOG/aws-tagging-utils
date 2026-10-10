@@ -105,6 +105,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 def handle_tag_change_event(event: Dict[str, Any]) -> Dict[str, Any]:
-    # Placeholder for aws.tag event handling
-    return {"statusCode": 200, "message": "Tag change evaluated"}
+    """Protected-tag drift: detect or revert changes made outside the app (see src.protected_tags)."""
+    from src.protected_tags import handle_tag_change_event as handle_drift
+    return handle_drift(event, exemption_manager=exemption_manager, notifier=notification_provider)
 

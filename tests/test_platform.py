@@ -192,6 +192,27 @@ def test_owner_matches_sso_session_names():
     assert owner_matches(["platform"], {"owner": "Platform"})
 
 
+def test_view_and_write_use_same_ownership_rule():
+    """The owner view and ApplicationOwner write checks must agree, including the Application tag."""
+    from src.insights import is_owned, owner_view
+    from src.authorization.ownership import OwnershipResolver
+    from src.authorization.roles import UserIdentity
+    me = UserIdentity("jane", ["ApplicationOwner"], email="jane@example.com")
+    cases = [
+        ({"Owner": "jane@example.com"}, True),
+        ({"Owner": "AWSReservedSSO_X_1/jane@example.com"}, True),
+        ({"application": "Jane"}, True),
+        ({"Owner": "bob@example.com"}, False),
+        ({}, False),
+    ]
+    rows = [{"id": f"arn:{i}", "status": "COMPLIANT", "tags": t, "violations": []} for i, (t, _) in enumerate(cases)]
+    view_ids = {r["id"] for r in owner_view(["jane", "jane@example.com"], rows, [], include_cost=False)["resources"]}
+    for i, (tags, expected) in enumerate(cases):
+        assert OwnershipResolver.is_owner(me, tags) is expected
+        assert is_owned(["jane", "jane@example.com"], tags) is expected
+        assert (f"arn:{i}" in view_ids) is expected
+
+
 def test_my_resources_endpoint(client, monkeypatch):
     import web.app as webapp
     from src.cache_manager import save_report

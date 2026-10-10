@@ -263,8 +263,8 @@ TagSync ensures tag consistency by propagating tags from "Parent" resources to t
 | `GOVERNANCE_TERMINATION_ENABLED` | `false` | Enable destructive termination (Disabled by default) |
 | `MULTI_ACCOUNT_ROLE_NAME` | `AWSOrganizationTagGovernanceRole` | Role to assume in member accounts |
 | `FINOPS_ENABLED` | `true` | Enable FinOps cost queries |
-| `DRIFT_ENABLED` | `true` | Detect tag drift |
-| `DRIFT_AUTO_REVERT` | `false` | Auto-revert unauthorized tag changes |
+| `DRIFT_ENABLED` | `true` | Detect changes to protected tags made outside the app |
+| `DRIFT_AUTO_REVERT` | `false` | Write the last authorized value back (see [docs/ENFORCEMENT.md](docs/ENFORCEMENT.md)) |
 | `RBAC_ENABLED` | `false` | Enable ownership-based authorization |
 | `OBSERVABILITY_ENABLED` | `true` | Enable EMF CloudWatch metrics |
 

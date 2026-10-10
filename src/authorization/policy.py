@@ -17,6 +17,15 @@ class AuthorizationPolicy:
         return False
 
     @staticmethod
+    def can_write_any_tags(identity: UserIdentity) -> bool:
+        """Holds a role that may write tags on at least some resources."""
+        return any(r in identity.roles for r in (Role.PLATFORM_ADMIN, Role.TAG_OPERATOR, Role.APP_OWNER))
+
+    @staticmethod
+    def can_write_all_resources(identity: UserIdentity) -> bool:
+        return Role.PLATFORM_ADMIN in identity.roles or Role.TAG_OPERATOR in identity.roles
+
+    @staticmethod
     def can_view_finops(identity: UserIdentity) -> bool:
         return Role.FINOPS in identity.roles or Role.PLATFORM_ADMIN in identity.roles
         

@@ -216,3 +216,34 @@ def test_production_default_auth_mode(client, monkeypatch):
     # Should default to alb_oidc and reject
     resp = client.get("/test/auth")
     assert resp.status_code == 401
+
+
+def test_alb_mode_custom_groups_claim(client, monkeypatch):
+    """AUTH_GROUPS_CLAIM selects the claim that carries IdP groups (e.g. Cognito)."""
+    monkeypatch.setenv("AUTH_MODE", "alb_oidc")
+    monkeypatch.setenv("AUTH_ALB_ARN", "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/my-alb/123")
+    monkeypatch.setenv("AUTH_ROLE_MAPPING", '{"engineers": "TagOperator"}')
+    monkeypatch.setenv("AUTH_GROUPS_CLAIM", "cognito:groups")
+
+    import src.auth.alb_oidc as alb_oidc
+    monkeypatch.setattr(alb_oidc, "_get_alb_public_key", lambda kid: test_public_key)
+
+    headers = {"kid": "test-kid", "signer": "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/my-alb/123"}
+    payload = {"sub": "user-123", "cognito:groups": ["engineers"], "exp": int(time.time()) + 1000}
+    token = generate_es256_token(payload, headers)
+
+    resp = client.post("/test/write", headers={"x-amzn-oidc-data": token}, json={"tags": {"Owner": "me"}})
+    assert resp.status_code == 200
+
+
+@pytest.mark.parametrize("kid", ["x-/../../evil", "a/b", "abc?x=1", "-" * 200, ""])
+def test_alb_public_key_rejects_malformed_kid(kid, monkeypatch):
+    """Malformed key ids never reach the key URL."""
+    import src.auth.alb_oidc as alb_oidc
+    from src.errors import APIError
+
+    def boom(*a, **k):
+        raise AssertionError("network must not be called")
+    monkeypatch.setattr(alb_oidc.urllib.request, "urlopen", boom)
+    with pytest.raises(APIError):
+        alb_oidc._get_alb_public_key(kid)

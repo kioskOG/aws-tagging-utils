@@ -625,6 +625,7 @@ sudo lsof -i :5050
 | `DEV_AUTH_USER` | When `local_dev` | — | `username:Role1,Role2` |
 | `AUTH_ALB_ARN` | When `alb_oidc` | — | Full ARN of the ALB |
 | `AUTH_AWS_REGION` | When `alb_oidc` | `AWS_DEFAULT_REGION` | Region for ALB public key lookup |
+| `AUTH_GROUPS_CLAIM` | No | `groups` | JWT claim holding IdP groups (e.g. `cognito:groups`) |
 | `SQLITE_DB_PATH` | No | `/app/data/app.db` | SQLite file path inside container |
 | `GOVERNANCE_SCHEMA_PATH` | No | `config/tag-schema.yaml` | Tag governance schema |
 | `MANDATORY_TAGS` | No | `Owner` | Comma-separated mandatory tag keys |

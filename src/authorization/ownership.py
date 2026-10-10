@@ -1,5 +1,5 @@
-from typing import Dict, Any
-from src.authorization.roles import Role, UserIdentity
+from typing import Dict
+from src.authorization.roles import UserIdentity
 
 class OwnershipResolver:
     """
@@ -7,11 +7,6 @@ class OwnershipResolver:
     """
     @staticmethod
     def is_owner(identity: UserIdentity, resource_tags: Dict[str, str]) -> bool:
-        """Same rules as the owner view: OWNER_MATCH_TAGS (default Owner) and Application,
-        matching the user id or email exactly or as the suffix of an SSO session name."""
-        from src.insights import owner_identifiers, owner_matches
-        ids = owner_identifiers(identity)
-        if owner_matches(ids, resource_tags):
-            return True
-        app = str(resource_tags.get("Application", "")).strip().lower()
-        return bool(app) and app in ids
+        """Same rule as the owner view (src.insights.is_owned)."""
+        from src.insights import owner_identifiers, is_owned
+        return is_owned(owner_identifiers(identity), resource_tags)

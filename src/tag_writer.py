@@ -15,6 +15,7 @@ from src.logging_config import get_logger
 from src.governance.engine import TagGovernanceEngine
 from src.governance.schema_provider import FileSchemaProvider
 from src.observability.metrics import record_tag_writes
+from src import protected_tags
 
 logger = get_logger(__name__)
 
@@ -76,6 +77,7 @@ def tag_resources(arns: List[str], tags: Dict[str, str], default_region: str) ->
                 failed = resp.get("FailedResourcesMap", {})
                 results["failed_resources"].update(failed)
                 results["tagged_count"] += (len(batch) - len(failed))
+                protected_tags.record_writes([a for a in batch if a not in failed], set_tags=tags, source="tag-write")
                 
         except Exception as e:
             logger.error("Failed to tag resources in region %s: %s", reg, e)

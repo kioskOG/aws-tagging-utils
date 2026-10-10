@@ -60,7 +60,10 @@ def test_sarif_output(mock_val_dir, mock_args, capsys):
     
     mock_val_dir.return_value = {
         "compliant": [],
-        "non_compliant": [mock_res]
+        "non_compliant": [mock_res],
+        "unresolved": [],
+        "files_scanned": 1,
+        "notes": [],
     }
     
     # Should exit 1 because of non-compliant resources

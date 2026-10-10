@@ -173,3 +173,4 @@ app.db
 app.db-*
 .compliance_cache.json
 data/
+**app.db**

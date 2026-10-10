@@ -5,16 +5,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tag Governance</title>
-  <script>
-    // Apply the saved theme before first paint so there is no flash.
-    try { var t = localStorage.getItem('atu-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
-  </script>
+  <script src="/static/theme.js?v=9"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=8">
+  <link rel="stylesheet" href="/static/app.css?v=9">
 </head>
 
 <body>
@@ -105,7 +102,7 @@
           </div>
         </div>
         <div class="topbar-actions">
-          <button id="btn-refresh-compliance" class="btn btn-outline btn-sm" onclick="triggerBackgroundRefresh()">
+          <button id="btn-refresh-compliance" class="btn btn-outline btn-sm" data-click="refresh-compliance">
             <svg class="ico icon"><use href="#i-refresh"/></svg> Refresh
           </button>
           <button class="icon-btn" id="theme-toggle" aria-label="Toggle colour theme" title="Toggle colour theme">
@@ -156,7 +153,7 @@
             <div class="section-title">Compliance trend</div>
             <div class="chart-sub">Compliance score per completed scan (%)</div>
           </div>
-          <button class="btn-ghost" onclick="toggleTrendTable()" id="trend-table-toggle">View as table</button>
+          <button class="btn-ghost" data-click="toggle-trend-table" id="trend-table-toggle">View as table</button>
         </div>
         <div id="dash-trend" class="chart-body"><div class="chart-empty">No scans yet. Run a compliance refresh to start the trend.</div></div>
         <div id="dash-trend-table" style="display:none;"></div>
@@ -208,7 +205,7 @@
             <div class="section-title">Inventory coverage</div>
             <div class="chart-sub" id="dash-coverage-sub">How much of the account the latest scan could see</div>
           </div>
-          <a class="btn-ghost" href="#schema" onclick="document.getElementById('ent-tab-schema').click(); return false;">Details →</a>
+          <a class="btn-ghost" href="#schema" data-click="goto-schema">Details →</a>
         </div>
         <div class="coverage-grid" id="dash-coverage-body"><div class="chart-empty">No scan yet.</div></div>
       </div>
@@ -226,20 +223,20 @@
       <div class="toolbar">
         <div class="search-input">
           <svg class="ico"><use href="#i-search"/></svg>
-          <input type="text" id="comp-filter-text" placeholder="Filter by ARN, account or tag value…" oninput="filterComplianceTable()">
+          <input type="text" id="comp-filter-text" placeholder="Filter by ARN, account or tag value…" data-input="filter-compliance">
         </div>
-        <select id="comp-filter-status" onchange="filterComplianceTable()">
+        <select id="comp-filter-status" data-change="filter-compliance">
           <option value="">All statuses</option>
           <option value="COMPLIANT">Compliant</option>
           <option value="NON_COMPLIANT">Non-compliant</option>
         </select>
-        <select id="comp-filter-service" onchange="filterComplianceTable()">
+        <select id="comp-filter-service" data-change="filter-compliance">
           <option value="">All services</option>
         </select>
-        <select id="comp-filter-region" onchange="filterComplianceTable()">
+        <select id="comp-filter-region" data-change="filter-compliance">
           <option value="">All regions</option>
         </select>
-        <select id="comp-filter-issue" onchange="filterComplianceTable()">
+        <select id="comp-filter-issue" data-change="filter-compliance">
           <option value="">Any issue</option>
           <option value="MISSING_REQUIRED">Missing tag</option>
           <option value="INVALID_VALUE">Invalid value</option>
@@ -254,15 +251,15 @@
         <div id="comp-result-count" class="chart-sub"></div>
         <div class="bulk-actions">
           <span id="bulk-selected-count" class="chart-sub">0 selected</span>
-          <button class="btn-ghost" onclick="selectAllFiltered(true)">Select all filtered</button>
-          <button class="btn-ghost" onclick="selectAllFiltered(false)">Clear</button>
-          <button class="btn btn-primary bulk-primary" id="btn-bulk-fix" data-perm="modify_tags" onclick="openBulkFix()" disabled>Bulk fix…</button>
+          <button class="btn-ghost" data-click="select-all-filtered">Select all filtered</button>
+          <button class="btn-ghost" data-click="clear-all-filtered">Clear</button>
+          <button class="btn btn-primary bulk-primary" id="btn-bulk-fix" data-perm="modify_tags" data-click="bulk-fix" disabled>Bulk fix…</button>
         </div>
       </div>
       <div class="table-container">
         <table>
           <thead><tr>
-            <th class="col-check"><input type="checkbox" id="comp-select-page" title="Select this page" onclick="selectPage(this.checked)"></th>
+            <th class="col-check"><input type="checkbox" id="comp-select-page" title="Select this page" data-click="select-page"></th>
             <th>Resource ID</th><th>Account</th><th>Type</th><th>Status</th>
             <th>Tags</th><th>Issues</th><th>Exemption</th><th>Actions</th>
           </tr></thead>
@@ -394,7 +391,7 @@
         </div>
         <div class="bulk-actions" id="mine-admin" style="display:none;">
           <input type="text" id="mine-owner" placeholder="View as owner (admins)…" class="input-sm" style="width:240px;">
-          <button class="btn btn-outline btn-sm" onclick="loadMine()">View</button>
+          <button class="btn btn-outline btn-sm" data-click="load-mine">View</button>
         </div>
       </div>
       <div class="kpi-grid">
@@ -410,7 +407,7 @@
       </div>
       <div class="bulk-bar">
         <div class="chart-sub" id="mine-count"></div>
-        <div class="bulk-actions"><button class="btn btn-primary bulk-primary" data-perm="modify_tags" onclick="openBulkFix(mineNonCompliant())">Fix all mine…</button></div>
+        <div class="bulk-actions"><button class="btn btn-primary bulk-primary" data-perm="modify_tags" data-click="bulk-fix-mine">Fix all mine…</button></div>
       </div>
       <div class="table-container">
         <table><thead><tr><th>Resource</th><th>Type</th><th>Status</th><th>Tags</th><th>Issues</th></tr></thead>
@@ -439,7 +436,7 @@
       </div>
       <div class="bulk-bar">
         <h3 class="block-title" style="margin:0;">Accounts scanned</h3>
-        <button class="btn-ghost" data-perm="manage_exemptions" onclick="refreshOrgDirectory()">Refresh names &amp; OUs</button>
+        <button class="btn-ghost" data-perm="manage_exemptions" data-click="refresh-org-directory">Refresh names &amp; OUs</button>
       </div>
       <div class="table-container">
         <table><thead><tr><th>Account</th><th>OU</th><th>Compliance %</th><th>Resources</th><th>Scan errors</th></tr></thead>
@@ -460,22 +457,22 @@
         <div id="prop-rules" class="rule-grid"></div>
         <div class="card-foot">
           <div class="chart-sub" id="prop-status">No check run yet.</div>
-          <button class="btn btn-primary bulk-primary" id="btn-prop-run" onclick="runPropagation()">Run check</button>
+          <button class="btn btn-primary bulk-primary" id="btn-prop-run" data-click="run-propagation">Run check</button>
         </div>
       </div>
       <div id="prop-summary" class="chip-row"></div>
       <div class="bulk-bar">
         <div class="bulk-actions">
-          <select id="prop-filter-rule" onchange="renderPropagation()" class="select-sm"><option value="">All rules</option></select>
-          <select id="prop-filter-kind" onchange="renderPropagation()" class="select-sm">
+          <select id="prop-filter-rule" data-change="render-propagation" class="select-sm"><option value="">All rules</option></select>
+          <select id="prop-filter-kind" data-change="render-propagation" class="select-sm">
             <option value="">Tags &amp; config</option><option value="tags">Missing/mismatched tags</option><option value="config">Propagation switched off</option>
           </select>
           <label class="inline-check"><input type="checkbox" id="prop-overwrite"> Overwrite mismatched values</label>
         </div>
         <div class="bulk-actions">
           <span class="chart-sub" id="prop-selected">0 selected</span>
-          <button class="btn-ghost" onclick="propSelectAll(true)">Select all shown</button>
-          <button class="btn btn-primary bulk-primary" data-perm="modify_tags" onclick="previewPropagationFix()">Preview fix…</button>
+          <button class="btn-ghost" data-click="prop-select-all">Select all shown</button>
+          <button class="btn btn-primary bulk-primary" data-perm="modify_tags" data-click="preview-propagation-fix">Preview fix…</button>
         </div>
       </div>
       <div class="table-container">
@@ -613,7 +610,7 @@
           </div>
           <div class="field">
             <div class="label-row"><label for="write-arns">Resource ARNs</label><button class="btn-ghost btn-xs"
-                onclick="document.getElementById('write-arns').value=''; toast('Inventory cleared', 'info')">Clear</button></div>
+                data-click="clear-write-arns">Clear</button></div>
             <textarea id="write-arns" placeholder="Paste ARNs here, one per line…"></textarea>
             <p class="hint">Mixed resource types are fine in one batch.</p>
           </div>
@@ -752,7 +749,7 @@
       <div class="modal-panel" style="width:min(640px,92vw);" role="dialog" aria-labelledby="fix-tags-title">
         <div class="modal-head">
           <h2 id="fix-tags-title">Fix tags</h2>
-          <button class="icon-btn" onclick="closeFixTagsModal()" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+          <button class="icon-btn" data-click="close-fix-tags" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
         </div>
 
         <div class="modal-meta">
@@ -767,8 +764,8 @@
         <div id="fix-tags-status" class="modal-status" style="display:none;"></div>
 
         <div class="modal-foot">
-          <button class="btn btn-outline" onclick="closeFixTagsModal()">Cancel</button>
-          <button id="fix-tags-submit" class="btn btn-primary" onclick="fixTagsConfirm()">Apply tags</button>
+          <button class="btn btn-outline" data-click="close-fix-tags">Cancel</button>
+          <button id="fix-tags-submit" class="btn btn-primary" data-click="fix-tags-confirm">Apply tags</button>
         </div>
       </div>
     </div>
@@ -778,7 +775,7 @@
       <div class="modal-panel" role="dialog" aria-labelledby="exempt-title">
         <div class="modal-head">
           <h2 id="exempt-title">Exempt resource</h2>
-          <button class="icon-btn" onclick="closeExemptModal()" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+          <button class="icon-btn" data-click="close-exempt" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
         </div>
         <div class="modal-meta">
           <div><div class="meta-label">Resource ARN</div><code id="exempt-arn" class="break"></code></div>
@@ -793,8 +790,8 @@
         </div>
         <div id="exempt-status" class="modal-status" style="display:none;"></div>
         <div class="modal-foot">
-          <button class="btn btn-outline" onclick="closeExemptModal()">Cancel</button>
-          <button id="exempt-submit" class="btn btn-primary" onclick="exemptConfirm()">Create exemption</button>
+          <button class="btn btn-outline" data-click="close-exempt">Cancel</button>
+          <button id="exempt-submit" class="btn btn-primary" data-click="exempt-confirm">Create exemption</button>
         </div>
       </div>
     </div>
@@ -804,13 +801,13 @@
       <div class="modal-panel modal-wide" role="dialog" aria-labelledby="change-title">
         <div class="modal-head">
           <h2 id="change-title">Bulk fix</h2>
-          <button class="icon-btn" onclick="closeChangeModal()" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+          <button class="icon-btn" data-click="close-change" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
         </div>
         <div id="change-form"></div>
         <div id="change-status" class="modal-status" style="display:none;"></div>
         <div id="change-preview"></div>
         <div class="modal-foot">
-          <button class="btn btn-outline" onclick="closeChangeModal()">Close</button>
+          <button class="btn btn-outline" data-click="close-change">Close</button>
           <button id="change-preview-btn" class="btn btn-outline">Preview</button>
           <button id="change-apply-btn" class="btn btn-primary" disabled>Apply</button>
         </div>
@@ -819,7 +816,7 @@
 
     <div id="chart-tooltip" class="chart-tooltip" role="tooltip" style="display:none;"></div>
 
-  <script src="/static/app.js?v=8"></script>
+  <script src="/static/app.js?v=9"></script>
 
 </body>
 

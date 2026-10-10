@@ -79,6 +79,22 @@ def start_timer():
     g.start_time = time.perf_counter()
 
 
+# No inline scripts or handlers: UI events go through data-click/data-change/data-input in app.js.
+# Inline style attributes are still used by the templates, hence 'unsafe-inline' for styles only.
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+
+
 @app.after_request
 def log_and_time_response(response):
     if hasattr(g, 'start_time'):
@@ -105,6 +121,7 @@ def log_and_time_response(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
     if request.path.startswith("/api/"):
         response.headers.setdefault("Cache-Control", "no-store")
     return response

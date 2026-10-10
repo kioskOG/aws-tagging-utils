@@ -121,6 +121,13 @@ def save_report(report_data: dict) -> dict:
         insert_scan(report_data)
     except Exception as exc:
         log.error("Failed to save compliance report to DB: %s", exc)
+    try:
+        from src import protected_tags
+        protected_tags.seed_baselines(
+            (r.get("ResourceARN"), r.get("Tags") or {})
+            for region in (report_data.get("regions") or {}).values() for r in region.get("resources") or [])
+    except Exception as exc:
+        log.error("Failed to seed protected-tag baselines: %s", exc)
         
     out = dict(report_data)
     out["_meta"] = {

@@ -498,6 +498,8 @@ def tag_untagged_arns(client, arns: List[str], owner_value: str) -> Tuple[List[s
         for a in batch:
             if a not in fm:
                 tagged.append(a)
+    from src import protected_tags
+    protected_tags.record_writes(tagged, set_tags=tags_to_apply, source="tag-on-create")
     from src.observability.metrics import record_auto_tagged
     record_auto_tagged(len(tagged))
     return tagged, failed

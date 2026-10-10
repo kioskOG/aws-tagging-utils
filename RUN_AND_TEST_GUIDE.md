@@ -212,7 +212,7 @@ set -a; source .env; set +a
 
 ### 4.9 Reserved flags (accepted but not implemented)
 
-`RBAC_ENABLED` (RBAC is **always** enforced), `FINOPS_AUTO_ACTIVATE_COST_TAGS`, `DRIFT_ENABLED`, `DRIFT_AUTO_REVERT`, `WORKER_ENABLED`, `WORKER_SHUTDOWN_TIMEOUT_SECONDS`, `GOVERNANCE_TERMINATION_ENABLED` (resources are never terminated).
+`RBAC_ENABLED` (RBAC is **always** enforced), `FINOPS_AUTO_ACTIVATE_COST_TAGS`, `WORKER_ENABLED`, `WORKER_SHUTDOWN_TIMEOUT_SECONDS`, `GOVERNANCE_TERMINATION_ENABLED` (resources are never terminated).
 
 ---
 

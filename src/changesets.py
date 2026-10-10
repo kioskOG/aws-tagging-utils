@@ -32,6 +32,7 @@ from src.clients import get_client
 from src.config import CHANGESET_RETENTION_DAYS, DEFAULT_REGION, MANDATORY_TAGS, MAX_BULK_RESOURCES
 from src.errors import APIError
 from src.logging_config import get_logger
+from src import protected_tags
 
 logger = get_logger(__name__)
 
@@ -206,6 +207,11 @@ def _run_tagging(items: List[Dict[str, Any]], untag: bool = False) -> None:
                 if it["arn"] in failed:
                     it["result"] = "FAILED"
                     it["error"] = failed[it["arn"]].get("ErrorMessage") or failed[it["arn"]].get("ErrorCode")
+            done = [a for a in arns if a not in failed]
+            if untag:
+                protected_tags.record_writes(done, removed=json.loads(payload), source="change-set")
+            else:
+                protected_tags.record_writes(done, set_tags=json.loads(payload), source="change-set")
 
 
 def apply(targets: List[Dict[str, Any]], overwrite: bool, actor: str, kind: str = "bulk_fix",

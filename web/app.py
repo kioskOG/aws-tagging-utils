@@ -297,7 +297,7 @@ def api_me():
         "roles": identity.roles,
         "auth_mode": os.environ.get("AUTH_MODE", AUTH_MODE_DEFAULT),
         "permissions": {
-            "modify_tags": AuthorizationPolicy.can_modify_tags(identity, {}),
+            "modify_tags": AuthorizationPolicy.can_write_any_tags(identity),
             "view_finops": AuthorizationPolicy.can_view_finops(identity),
             "manage_exemptions": AuthorizationPolicy.can_manage_exemptions(identity),
             "manage_protected_tags": AuthorizationPolicy.can_manage_protected_tags(identity),
@@ -333,6 +333,8 @@ def api_write():
         requested_arns = collect_arns(payload, validate=False)
     except ValueError:
         requested_arns = []  # the handler returns the validation error
+    tags = payload.get("tags") if isinstance(payload.get("tags"), dict) else {}
+    _authorize_tag_write(requested_arns, tags)
     result = write_handler(payload, None)
 
     status = int(result.get("statusCode", 500))
@@ -367,6 +369,17 @@ def api_write():
 @require_auth
 def api_gov():
     payload = request.get_json(force=True, silent=True) or {}
+    if not AuthorizationPolicy.can_write_all_resources(g.identity):
+        raise APIError("Forbidden. Auto-tagging needs TagOperator or PlatformAdmin.", status_code=403, error_code="FORBIDDEN")
+    # Raw CloudTrail events reach tag-on-create from EventBridge only; through the API the
+    # creator identity in the event could be forged.
+    if payload.get("action") != "scan":
+        raise APIError("Only {\"action\": \"scan\"} is accepted here.", status_code=400, error_code="INVALID_REQUEST")
+    from src.protected_tags import touched
+    from src.config import OWNER_TAG_KEY
+    if touched([OWNER_TAG_KEY]) and not AuthorizationPolicy.can_manage_protected_tags(g.identity):
+        raise APIError(f"{OWNER_TAG_KEY} is protected; auto-tagging needs SecurityAdmin or PlatformAdmin.",
+                       status_code=403, error_code="FORBIDDEN")
     result = gov_handler(payload, None)
     return _lambda_result_to_response(result)
 
@@ -393,14 +406,29 @@ def api_report():
     return _lambda_result_to_response(result)
 
 
+def _authorize_sync_protected(payload: Dict[str, Any]) -> None:
+    """Sync copies whatever the parent carries; dry-run it first when protected keys may be involved."""
+    from src.protected_tags import protected_keys
+    if not protected_keys() or AuthorizationPolicy.can_manage_protected_tags(g.identity):
+        return
+    dry = sync_handler({**payload, "dry_run": True, "action": "propagate",
+                        "rule": payload.get("rule") or "vpc",
+                        "parent": payload.get("parent") or payload.get("vpc_id")}, None)
+    if int(dry.get("statusCode", 500)) != 200:
+        return  # the real call reports the same error
+    from src import propagation
+    plan = propagation.fix_plan(dry.get("body", {}).get("findings", []), bool(payload.get("overwrite")))
+    _authorize_bulk(plan["targets"])
+
+
 @app.post("/api/sync")
 @require_auth
 def api_sync():
     payload = request.get_json(force=True, silent=True) or {}
     if not payload.get("dry_run"):
-        from src.authorization.policy import AuthorizationPolicy as _P
-        if not _P.can_modify_tags(g.identity, {}):
+        if not AuthorizationPolicy.can_write_all_resources(g.identity):
             raise APIError("Forbidden. Insufficient permissions to modify tags.", status_code=403, error_code="FORBIDDEN")
+        _authorize_sync_protected(payload)
     payload["actor"] = _actor()
     result = sync_handler(payload, None)
     return _lambda_result_to_response(result)
@@ -468,10 +496,8 @@ def api_compliance_history():
 
 
 def _protected_tags() -> set:
-    try:
-        return {k for k, rule in schema_provider.get_schema().items() if getattr(rule, "protected", False)}
-    except Exception:
-        return set()
+    from src.protected_tags import protected_keys
+    return protected_keys()
 
 
 def _flatten_resources(report: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -862,21 +888,34 @@ def _bulk_targets(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [{"arn": a, "tags": tags} for a in arns]
 
 
-def _authorize_bulk(targets: List[Dict[str, Any]]) -> None:
-    """Admins/operators may change anything; ApplicationOwners only resources they own."""
-    from src.authorization.roles import Role
+def _authorize_tag_write(arns: List[str], keys) -> None:
+    """
+    The single write check for every tag-changing endpoint:
+    - admins/operators may write any resource, ApplicationOwners only resources whose *live*
+      tags say they own them (never the tags in the request);
+    - protected keys need SecurityAdmin or PlatformAdmin.
+    """
     from src.authorization.ownership import OwnershipResolver
+    from src.protected_tags import touched
     identity = g.identity
-    if Role.PLATFORM_ADMIN in identity.roles or Role.TAG_OPERATOR in identity.roles:
-        return
-    if Role.APP_OWNER not in identity.roles:
+    if not AuthorizationPolicy.can_write_any_tags(identity):
         raise APIError("Forbidden. Insufficient permissions to modify tags.", status_code=403, error_code="FORBIDDEN")
+    protected = touched(keys)
+    if protected and not AuthorizationPolicy.can_manage_protected_tags(identity):
+        raise APIError(f"Only SecurityAdmin or PlatformAdmin may change protected tags: {', '.join(sorted(protected))}",
+                       status_code=403, error_code="FORBIDDEN", details={"protected_tags": sorted(protected)})
+    if AuthorizationPolicy.can_write_all_resources(identity) or not arns:
+        return
     from src.changesets import fetch_current_tags
-    current = fetch_current_tags([t["arn"] for t in targets])
+    current = fetch_current_tags(list(arns))
     not_owned = [a for a, tags in current.items() if not OwnershipResolver.is_owner(identity, tags)]
     if not_owned:
         raise APIError(f"You don't own {len(not_owned)} of these resources.", status_code=403,
                        error_code="FORBIDDEN", details={"not_owned": not_owned[:20]})
+
+
+def _authorize_bulk(targets: List[Dict[str, Any]]) -> None:
+    _authorize_tag_write([t["arn"] for t in targets], {k for t in targets for k in (t.get("tags") or {})})
 
 
 @app.post("/api/bulk/preview")
@@ -926,6 +965,10 @@ def api_get_changeset(cs_id):
 @require_tag_modify_permission()
 def api_undo_changeset(cs_id):
     from src import changesets
+    cs = changesets.get_change_set(cs_id)
+    if cs:
+        items = [i for i in cs["items"] if i.get("op") == "tags"]
+        _authorize_tag_write([i["arn"] for i in items], {k for i in items for k in (i.get("after") or {})})
     return jsonify(changesets.undo(cs_id, _actor(), request_id=getattr(g, "request_id", None))), 201
 
 
@@ -1051,6 +1094,8 @@ def api_post_remediation():
     payload = request.get_json(force=True, silent=True)
     if not payload:
         raise APIError("Missing JSON payload", status_code=400, error_code="BAD_REQUEST")
+    requested = payload.get("requested_tags") if isinstance(payload.get("requested_tags"), dict) else {}
+    _authorize_tag_write([payload["resource_arn"]] if payload.get("resource_arn") else [], requested)
 
     from src.enforcement import remediation_engine
     req_id = getattr(g, 'request_id', 'unknown')

@@ -10,6 +10,14 @@ Ordered by impact ÷ effort. Each item says *why it matters* and *where it plugs
 - **My Resources** owner view with expiring exemptions and unallocated spend share.
 - **Tag propagation** checks and fixes for 10 parent types, incl. ASG `PropagateAtLaunch` and ECS `propagateTags` config fixes; VPC sync no longer copies `Name`.
 
+## Delivered in v0.5
+
+- **Protected tags enforced** on every write path (SecurityAdmin / PlatformAdmin only), with **drift detection and auto-revert** from `Tag Change on Resource` events against stored baselines (`DRIFT_ENABLED`, `DRIFT_AUTO_REVERT`).
+- **Write authorization fixes**: ApplicationOwner writes are checked against live tags (not the request); `/api/gov` needs TagOperator/PlatformAdmin and accepts scans only.
+- **Strict CSP** (`script-src 'self'`): no inline scripts or handlers left in the UI.
+- **Auth hardening**: strict ALB key-id validation; IdP groups claim configurable (`AUTH_GROUPS_CLAIM`).
+- One ownership rule for the owner view and write checks; scratch files and the compliance cache removed from git (still in history).
+
 ## Known gaps (fix before calling it production-grade)
 
 | Gap | Impact | Plug-in point |
@@ -17,10 +25,8 @@ Ordered by impact ÷ effort. Each item says *why it matters* and *where it plugs
 | Resource Explorer is opt-in and needs an index per region (or an aggregator) | Default installs still miss never-tagged resources | Provide a Terraform/CloudFormation snippet that enables RE org-wide; consider making it the default |
 | Snapshot ARNs carry no account ID, so cross-account fixes on snapshots run with the central credentials | Fixes on member-account snapshots fail | Carry the owning account through findings into change-set items |
 | Security and CI/CD tabs return 501 | Half-empty UI | See items 5, 8 below |
-| Protected-tag drift + auto-revert are placeholders (`handle_tag_change_event`) | Promised feature missing | EventBridge `Tag Change on Resource` → compare with last known tags → revert protected keys, audit, notify |
+| Parallel first requests on a fresh SQLite DB can fail (`OperationalError` on `/api/finops`) | Errors on a brand-new install's first page load | Initialise the DB once at startup instead of lazily per module |
 | Web app keeps refresh state in-process (one gunicorn worker) | No horizontal scaling / HA | Move scans to the SQS worker (`job_type: COMPLIANCE_SCAN`), store state in Postgres/DynamoDB, make the web tier stateless |
-| `app.db` and `.compliance_cache.json` are committed to git | Leaks ARNs/audit data; stale data migrates into new installs | `git rm --cached app.db .compliance_cache.json` (now in `.gitignore`) |
-| CSP header absent (UI uses inline handlers) | XSS defense-in-depth | Move inline `onclick` to listeners, then add a strict `Content-Security-Policy` |
 
 ## Differentiators (what nobody else does well together)
 
